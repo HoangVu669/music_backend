@@ -1,0 +1,81 @@
+{
+  "info": {
+    "name": "Music API",
+    "_postman_id": "b6f7e1a2-0f2e-4f35-bc8a-9d0d7f6e9c11",
+    "description": "Postman collection for Music API (Auth, Admin Users, Zing, Health) - using ZingMP3 as data source.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/health",
+              "host": ["{{base_url}}"],
+              "path": ["health"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {"name":"Register","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/auth/register","host":["{{base_url}}"],"path":["api","auth","register"]},"body":{"mode":"raw","raw":"{\n  \"email\": \"user@example.com\",\n  \"phone\": \"0123456789\",\n  \"password\": \"Password123!\",\n  \"fullName\": \"John Doe\"\n}"}},"response":[]},
+        {"name":"Login","event":[{"listen":"test","script":{"exec":["const resp = pm.response.json();","if (resp && resp.data && resp.data.token) {","  pm.collectionVariables.set('token', resp.data.token);","}"],"type":"text/javascript"}}],"request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/auth/login","host":["{{base_url}}"],"path":["api","auth","login"]},"body":{"mode":"raw","raw":"{\n  \"email\": \"user@example.com\",\n  \"password\": \"Password123!\"\n}"}},"response":[]},
+        {"name":"Me","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/auth/me","host":["{{base_url}}"],"path":["api","auth","me"]}},"response":[]},
+        {"name":"Forgot Password","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/auth/forgot-password","host":["{{base_url}}"],"path":["api","auth","forgot-password"]},"body":{"mode":"raw","raw":"{\n  \"email\": \"user@example.com\"\n}"}},"response":[]},
+        {"name":"Reset Password","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/auth/reset-password","host":["{{base_url}}"],"path":["api","auth","reset-password"]},"body":{"mode":"raw","raw":"{\n  \"token\": \"<RESET_TOKEN>\",\n  \"newPassword\": \"NewPassword123!\"\n}"}},"response":[]},
+        {"name":"Logout","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/auth/logout","host":["{{base_url}}"],"path":["api","auth","logout"]}},"response":[]},
+        {"name":"Refresh Token","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/auth/refresh","host":["{{base_url}}"],"path":["api","auth","refresh"]}},"response":[]}
+      ]
+    },
+    {
+      "name": "Admin - Users",
+      "item": [
+        {"name":"List Users","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/admin/users?page=1&limit=10","host":["{{base_url}}"],"path":["api","admin","users"],"query":[{"key":"page","value":"1"},{"key":"limit","value":"10"}]}},"response":[]},
+        {"name":"Get User By ID","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/admin/users/{{user_id}}","host":["{{base_url}}"],"path":["api","admin","users","{{user_id}}"]}},"response":[]},
+        {"name":"Update User","request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/admin/users/{{user_id}}","host":["{{base_url}}"],"path":["api","admin","users","{{user_id}}"]},"body":{"mode":"raw","raw":"{\n  \"role\": \"user\",\n  \"isActive\": true,\n  \"isVerified\": true\n}"}},"response":[]},
+        {"name":"Delete User (Soft)","request":{"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/admin/users/{{user_id}}","host":["{{base_url}}"],"path":["api","admin","users","{{user_id}}"]},"body":{"mode":"raw","raw":"{\n  \"reason\": \"User requested account removal\"\n}"}},"response":[]},
+        {"name":"Block User","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/admin/users/{{user_id}}/block","host":["{{base_url}}"],"path":["api","admin","users","{{user_id}}","block"]},"body":{"mode":"raw","raw":"{\n  \"reason\": \"Violation of terms\"\n}"}},"response":[]},
+        {"name":"Unblock User","request":{"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/admin/users/{{user_id}}/unblock","host":["{{base_url}}"],"path":["api","admin","users","{{user_id}}","unblock"]}},"response":[]},
+        {"name":"User Activities","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/admin/users/{{user_id}}/activities?page=1&limit=10","host":["{{base_url}}"],"path":["api","admin","users","{{user_id}}","activities"],"query":[{"key":"page","value":"1"},{"key":"limit","value":"10"}]}},"response":[]},
+        {"name":"User Statistics","request":{"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}"}],"url":{"raw":"{{base_url}}/api/admin/users/stats?days=30","host":["{{base_url}}"],"path":["api","admin","users","stats"],"query":[{"key":"days","value":"30"}]}},"response":[]},
+        {"name":"Update Subscription","request":{"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{token}}"},{"key":"Content-Type","value":"application/json"}],"url":{"raw":"{{base_url}}/api/admin/users/{{user_id}}/subscription","host":["{{base_url}}"],"path":["api","admin","users","{{user_id}}","subscription"]},"body":{"mode":"raw","raw":"{\n  \"type\": \"premium\",\n  \"isActive\": true\n}"}},"response":[]}
+      ]
+    },
+    {
+      "name": "Zing",
+      "item": [
+        {"name":"Song","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/song?id={{zing_id}}","host":["{{base_url}}"],"path":["api","zing","song"],"query":[{"key":"id","value":"{{zing_id}}"}]}},"response":[]},
+        {"name":"Playlist","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/playlist?id={{zing_id}}","host":["{{base_url}}"],"path":["api","zing","playlist"],"query":[{"key":"id","value":"{{zing_id}}"}]}},"response":[]},
+        {"name":"Home","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/home","host":["{{base_url}}"],"path":["api","zing","home"]}},"response":[]},
+        {"name":"Top100","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/top100","host":["{{base_url}}"],"path":["api","zing","top100"]}},"response":[]},
+        {"name":"Chart Home","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/chart-home","host":["{{base_url}}"],"path":["api","zing","chart-home"]}},"response":[]},
+        {"name":"New Release","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/new-release","host":["{{base_url}}"],"path":["api","zing","new-release"]}},"response":[]},
+        {"name":"Info Song","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/info?id={{zing_id}}","host":["{{base_url}}"],"path":["api","zing","info"],"query":[{"key":"id","value":"{{zing_id}}"}]}},"response":[]},
+        {"name":"Artist","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/artist?name={{zing_name}}","host":["{{base_url}}"],"path":["api","zing","artist"],"query":[{"key":"name","value":"{{zing_name}}"}]}},"response":[]},
+        {"name":"Artist Songs","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/artist-songs?id={{zing_id}}&page=1&count=20","host":["{{base_url}}"],"path":["api","zing","artist-songs"],"query":[{"key":"id","value":"{{zing_id}}"},{"key":"page","value":"1"},{"key":"count","value":"20"}]}},"response":[]},
+        {"name":"Lyric","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/lyric?id={{zing_id}}","host":["{{base_url}}"],"path":["api","zing","lyric"],"query":[{"key":"id","value":"{{zing_id}}"}]}},"response":[]},
+        {"name":"Search","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/search?keyword={{zing_keyword}}","host":["{{base_url}}"],"path":["api","zing","search"],"query":[{"key":"keyword","value":"{{zing_keyword}}"}]}},"response":[]},
+        {"name":"List MVs","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/mvs?id={{zing_id}}&page=1&count=20","host":["{{base_url}}"],"path":["api","zing","mvs"],"query":[{"key":"id","value":"{{zing_id}}"},{"key":"page","value":"1"},{"key":"count","value":"20"}]}},"response":[]},
+        {"name":"MV Category","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/mv-category?id={{zing_id}}","host":["{{base_url}}"],"path":["api","zing","mv-category"],"query":[{"key":"id","value":"{{zing_id}}"}]}},"response":[]},
+        {"name":"Video","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/video?id={{zing_id}}","host":["{{base_url}}"],"path":["api","zing","video"],"query":[{"key":"id","value":"{{zing_id}}"}]}},"response":[]},
+        {"name":"Suggest","request":{"method":"GET","url":{"raw":"{{base_url}}/api/zing/suggest","host":["{{base_url}}"],"path":["api","zing","suggest"]}},"response":[]}
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000" },
+    { "key": "token", "value": "" },
+    { "key": "user_id", "value": "<PUT_USER_ID_HERE>" },
+    { "key": "zing_id", "value": "<PUT_ZING_ID_HERE>" },
+    { "key": "zing_name", "value": "<PUT_ARTIST_NAME_HERE>" },
+    { "key": "zing_keyword", "value": "<PUT_KEYWORD_HERE>" }
+  ]
+}
