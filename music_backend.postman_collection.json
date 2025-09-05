@@ -1,0 +1,248 @@
+{
+  "info": {
+    "name": "Music Backend API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "9b9f5a09-9f3c-4d77-8b7a-collection-music"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/health" }
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Auth - Register",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user1\",\n  \"email\": \"user1@example.com\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/user/auth/register"
+          }
+        },
+        {
+          "name": "Auth - Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const token = json && json.data && json.data.token;",
+                  "  if (token) { pm.collectionVariables.set('userToken', token); }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"user1\",\n  \"password\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/v1/user/auth/login"
+          },
+          "response": []
+        },
+        {
+          "name": "Auth - Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"new@example.com\"\n}" },
+            "url": "{{baseUrl}}/api/v1/user/auth/profile"
+          }
+        },
+        {
+          "name": "Song - Get Song",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}" }
+        },
+        {
+          "name": "Song - Get Lyric",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/lyric" }
+        },
+        {
+          "name": "Song - Like",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+            "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/like"
+          }
+        },
+        {
+          "name": "Song - Unlike",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+            "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/like"
+          }
+        },
+        {
+          "name": "Playlist - Create",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{userToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"My Playlist\"\n}" },
+            "url": "{{baseUrl}}/api/v1/user/playlists"
+          }
+        },
+        {
+          "name": "Playlist - List Mine",
+          "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists" }
+        },
+        {
+          "name": "Playlist - Get By Id",
+          "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}" }
+        },
+        {
+          "name": "Playlist - Update By Id",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed Playlist\"\n}" },
+            "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}"
+          }
+        },
+        {
+          "name": "Playlist - Delete By Id",
+          "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}" }
+        },
+        {
+          "name": "Playlist - Add Song",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"songId\": \"{{zingSongId}}\"\n}" },
+            "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}/songs"
+          }
+        },
+        {
+          "name": "Artist - Follow",
+          "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/artists/{{artistId}}/follow" }
+        },
+        {
+          "name": "Artist - Unfollow",
+          "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/artists/{{artistId}}/follow" }
+        },
+        {
+          "name": "Artist - Info",
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/artists/info/{{artistName}}" }
+        },
+        {
+          "name": "Social - Comment Song",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Nice song!\"\n}" },
+            "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/comments"
+          }
+        },
+        {
+          "name": "Social - Get My Likes",
+          "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/me/likes" }
+        },
+        {
+          "name": "Social - Share Playlist",
+          "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}/share" }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Auth - Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "try {",
+                  "  const json = pm.response.json();",
+                  "  const token = json && json.data && json.data.token;",
+                  "  if (token) { pm.collectionVariables.set('adminToken', token); }",
+                  "} catch (e) {}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/v1/admin/auth/login"
+          }
+        },
+        {
+          "name": "Users - List",
+          "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/users" }
+        },
+        {
+          "name": "Users - Create",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"user2\",\n  \"email\": \"user2@example.com\",\n  \"password\": \"123456\"\n}" },
+            "url": "{{baseUrl}}/api/v1/admin/users"
+          }
+        },
+        { "name": "Users - Get", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}" } },
+        { "name": "Users - Update", "request": { "method": "PUT", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" } ], "body": { "mode": "raw", "raw": "{\n  \"email\": \"changed@example.com\"\n}" }, "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}" } },
+        { "name": "Users - Delete", "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}" } },
+        { "name": "Users - Lock", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/lock" } },
+        { "name": "Users - Unlock", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/unlock" } },
+        { "name": "Users - Reset Password", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/users/{{userId}}/reset-password" } },
+
+        { "name": "Songs - List", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/songs" } },
+        { "name": "Songs - Create", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" } ], "body": { "mode": "raw", "raw": "{\n  \"songId\": \"{{zingSongId}}\",\n  \"title\": \"Title\"\n}" }, "url": "{{baseUrl}}/api/v1/admin/songs" } },
+        { "name": "Songs - Top Liked", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/songs/top-liked" } },
+        { "name": "Songs - Get", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/songs/{{songDbId}}" } },
+        { "name": "Songs - Update", "request": { "method": "PUT", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" } ], "body": { "mode": "raw", "raw": "{\n  \"title\": \"New Title\"\n}" }, "url": "{{baseUrl}}/api/v1/admin/songs/{{songDbId}}" } },
+        { "name": "Songs - Delete", "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/songs/{{songDbId}}" } },
+        { "name": "Songs - Sync from Zing", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/songs/sync/{{zingSongId}}" } },
+
+        { "name": "Playlists - List", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/playlists" } },
+        { "name": "Playlists - Get", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/playlists/{{playlistId}}" } },
+        { "name": "Playlists - Update", "request": { "method": "PUT", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" } ], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Admin Edited\"\n}" }, "url": "{{baseUrl}}/api/v1/admin/playlists/{{playlistId}}" } },
+        { "name": "Playlists - Delete", "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/playlists/{{playlistId}}" } },
+
+        { "name": "Artists - List", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/artists" } },
+        { "name": "Artists - Create", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" } ], "body": { "mode": "raw", "raw": "{\n  \"name\": \"Artist Name\",\n  \"artistId\": \"{{artistId}}\"\n}" }, "url": "{{baseUrl}}/api/v1/admin/artists" } },
+        { "name": "Artists - Get", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/artists/{{artistDbId}}" } },
+        { "name": "Artists - Update", "request": { "method": "PUT", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "Content-Type", "value": "application/json" } ], "body": { "mode": "raw", "raw": "{\n  \"bio\": \"Bio\"\n}" }, "url": "{{baseUrl}}/api/v1/admin/artists/{{artistDbId}}" } },
+        { "name": "Artists - Delete", "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/artists/{{artistDbId}}" } },
+        { "name": "Artists - Sync Songs", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/artists/{{artistId}}/sync/songs" } },
+        { "name": "Artists - Sync Playlists", "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/artists/{{artistId}}/sync/playlists" } },
+
+        { "name": "Social - Stats", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/social/stats" } },
+        { "name": "Dashboard - Metrics", "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ], "url": "{{baseUrl}}/api/v1/admin/dashboard/metrics" } }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "userToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "zingSongId", "value": "ZW9C08WF" },
+    { "key": "playlistId", "value": "" },
+    { "key": "artistId", "value": "IWZ9Z08I" },
+    { "key": "artistName", "value": "Sơn Tùng M-TP" },
+    { "key": "songDbId", "value": "" },
+    { "key": "artistDbId", "value": "" },
+    { "key": "userId", "value": "" }
+  ]
+}
+
+
