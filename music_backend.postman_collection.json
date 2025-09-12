@@ -1,6 +1,7 @@
 {
   "info": {
-    "name": "Music Backend API",
+    "name": "Music Backend API - Enhanced",
+    "description": "Complete Music Backend API with Zing MP3 integration. Includes song details, streaming URLs, playlists, artists, and social features.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
     "_postman_id": "9b9f5a09-9f3c-4d77-8b7a-collection-music"
   },
@@ -13,7 +14,10 @@
       "name": "User",
       "item": [
         {
-          "name": "Auth - Register",
+          "name": "Authentication",
+          "item": [
+            {
+              "name": "Register",
           "request": {
             "method": "POST",
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
@@ -25,7 +29,7 @@
           }
         },
         {
-          "name": "Auth - Login",
+              "name": "Login",
           "event": [
             {
               "listen": "test",
@@ -46,31 +50,117 @@
             "header": [ { "key": "Content-Type", "value": "application/json" } ],
             "body": { "mode": "raw", "raw": "{\n  \"username\": \"user1\",\n  \"password\": \"123456\"\n}" },
             "url": "{{baseUrl}}/api/v1/user/auth/login"
-          },
-          "response": []
+              }
         },
         {
-          "name": "Auth - Update Profile",
+              "name": "Update Profile",
           "request": {
             "method": "PUT",
             "header": [
               { "key": "Authorization", "value": "Bearer {{userToken}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"new@example.com\"\n}" },
+                "body": { 
+                  "mode": "raw", 
+                  "raw": "{\n  \"profile\": {\n    \"displayName\": \"New Display Name\",\n    \"bio\": \"My bio\"\n  },\n  \"preferences\": {\n    \"language\": \"vi\",\n    \"theme\": \"dark\"\n  }\n}" 
+                },
             "url": "{{baseUrl}}/api/v1/user/auth/profile"
           }
+            }
+          ]
         },
         {
-          "name": "Song - Get Song",
-          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}" }
+          "name": "Music & Discovery",
+          "item": [
+            {
+              "name": "Get Home Data",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/home" }
+            },
+            {
+              "name": "Get Top 100",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/charts/top100" }
+            },
+            {
+              "name": "Get Chart Home",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/charts/home" }
+            },
+            {
+              "name": "Get New Release Chart",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/charts/new-release" }
+            },
+            {
+              "name": "Search Music",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/search?q={{searchQuery}}&type=song",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "search"],
+                  "query": [
+                    {"key": "q", "value": "{{searchQuery}}"},
+                    {"key": "type", "value": "song"}
+                  ]
+                }
+              }
+            }
+          ]
         },
         {
-          "name": "Song - Get Lyric",
-          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/lyric" }
-        },
-        {
-          "name": "Song - Like",
+          "name": "Songs",
+          "description": "Song-related endpoints. Note: getSong() = streaming URL, getSongInfo() = metadata only",
+          "item": [
+            {
+              "name": "Get Song Details (Info + Lyric)",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}",
+                "description": "Get complete song information including metadata and lyrics"
+              }
+            },
+            {
+              "name": "Get Song Info Only (Metadata)",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/info",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "songs", "{{zingSongId}}", "info"]
+                },
+                "description": "Get only song metadata (title, artist, album, duration, thumbnail) without lyrics"
+              }
+            },
+            {
+              "name": "Get Song Lyric Only",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/lyric",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "songs", "{{zingSongId}}", "lyric"]
+                },
+                "description": "Get only song lyrics"
+              }
+            },
+            {
+              "name": "Get Streaming URL (Audio Link)",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/stream?forceRefresh=false",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "songs", "{{zingSongId}}", "stream"],
+                  "query": [{"key": "forceRefresh", "value": "false"}]
+                },
+                "description": "Get streaming URL (audio link) to play the song"
+              }
+            },
+            {
+              "name": "Like/Unlike Song",
           "request": {
             "method": "POST",
             "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
@@ -78,83 +168,289 @@
           }
         },
         {
-          "name": "Song - Unlike",
+              "name": "Get Liked Songs",
           "request": {
-            "method": "DELETE",
+                "method": "GET", 
             "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
-            "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/like"
-          }
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/songs/liked?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "songs", "liked"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            }
+          ]
         },
         {
-          "name": "Playlist - Create",
+          "name": "Playlists",
+          "item": [
+            {
+              "name": "Create Playlist",
           "request": {
             "method": "POST",
             "header": [
               { "key": "Authorization", "value": "Bearer {{userToken}}" },
               { "key": "Content-Type", "value": "application/json" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"My Playlist\"\n}" },
+                "body": { 
+                  "mode": "raw", 
+                  "raw": "{\n  \"name\": \"My Favorite Playlist\",\n  \"description\": \"A collection of my favorite songs\",\n  \"isPublic\": false\n}" 
+                },
             "url": "{{baseUrl}}/api/v1/user/playlists"
           }
         },
         {
-          "name": "Playlist - List Mine",
-          "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists" }
-        },
-        {
-          "name": "Playlist - Get By Id",
+              "name": "Get My Playlists",
+              "request": { 
+                "method": "GET", 
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/playlists?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "playlists"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Public Playlists",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/playlists/public?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "playlists", "public"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Playlist Details",
           "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}" }
         },
         {
-          "name": "Playlist - Update By Id",
+              "name": "Update Playlist",
           "request": {
             "method": "PUT",
-            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Renamed Playlist\"\n}" },
+                "header": [ 
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" }, 
+                  { "key": "Content-Type", "value": "application/json" } 
+                ],
+                "body": { 
+                  "mode": "raw", 
+                  "raw": "{\n  \"name\": \"Updated Playlist Name\",\n  \"description\": \"Updated description\",\n  \"isPublic\": true\n}" 
+                },
             "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}"
           }
         },
         {
-          "name": "Playlist - Delete By Id",
+              "name": "Delete Playlist",
           "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}" }
         },
         {
-          "name": "Playlist - Add Song",
+              "name": "Add Song to Playlist",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
+                "header": [ 
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" }, 
+                  { "key": "Content-Type", "value": "application/json" } 
+                ],
             "body": { "mode": "raw", "raw": "{\n  \"songId\": \"{{zingSongId}}\"\n}" },
             "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}/songs"
           }
         },
         {
-          "name": "Artist - Follow",
+              "name": "Remove Song from Playlist",
+              "request": { 
+                "method": "DELETE", 
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], 
+                "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}/songs/{{zingSongId}}" 
+              }
+            }
+          ]
+        },
+        {
+          "name": "Artists",
+          "item": [
+            {
+              "name": "Get Artist Details",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/artists/{{artistId}}" }
+            },
+            {
+              "name": "Get Artist Songs",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/artists/{{artistId}}/songs?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "artists", "{{artistId}}", "songs"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Artist Playlists",
+              "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/artists/{{artistId}}/playlists" }
+            },
+            {
+              "name": "Follow/Unfollow Artist",
           "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/artists/{{artistId}}/follow" }
         },
         {
-          "name": "Artist - Unfollow",
-          "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/artists/{{artistId}}/follow" }
+              "name": "Get Followed Artists",
+              "request": { 
+                "method": "GET", 
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/artists/followed?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "artists", "followed"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Popular Artists",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/artists/popular?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "artists", "popular"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            }
+          ]
         },
         {
-          "name": "Artist - Info",
-          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/v1/user/artists/info/{{artistName}}" }
-        },
-        {
-          "name": "Social - Comment Song",
+          "name": "Social Features",
+          "item": [
+            {
+              "name": "Comment on Song",
+              "request": {
+                "method": "POST",
+                "header": [ 
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" }, 
+                  { "key": "Content-Type", "value": "application/json" } 
+                ],
+                "body": { 
+                  "mode": "raw", 
+                  "raw": "{\n  \"content\": \"This song is amazing! 🎵\",\n  \"parentCommentId\": null\n}" 
+                },
+                "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/comments"
+              }
+            },
+            {
+              "name": "Reply to Comment",
           "request": {
             "method": "POST",
-            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" }, { "key": "Content-Type", "value": "application/json" } ],
-            "body": { "mode": "raw", "raw": "{\n  \"content\": \"Nice song!\"\n}" },
+                "header": [ 
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" }, 
+                  { "key": "Content-Type", "value": "application/json" } 
+                ],
+                "body": { 
+                  "mode": "raw", 
+                  "raw": "{\n  \"content\": \"I totally agree! 👍\",\n  \"parentCommentId\": \"{{commentId}}\"\n}" 
+                },
             "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/comments"
           }
         },
         {
-          "name": "Social - Get My Likes",
-          "request": { "method": "GET", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/me/likes" }
-        },
-        {
-          "name": "Social - Share Playlist",
-          "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/playlists/{{playlistId}}/share" }
+              "name": "Get Song Comments",
+              "request": { 
+                "method": "GET", 
+                "header": [], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/comments?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "songs", "{{zingSongId}}", "comments"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Update Comment",
+              "request": {
+                "method": "PUT",
+                "header": [ 
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" }, 
+                  { "key": "Content-Type", "value": "application/json" } 
+                ],
+                "body": { "mode": "raw", "raw": "{\n  \"content\": \"Updated comment content\"\n}" },
+                "url": "{{baseUrl}}/api/v1/user/comments/{{commentId}}"
+              }
+            },
+            {
+              "name": "Delete Comment",
+              "request": { "method": "DELETE", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/comments/{{commentId}}" }
+            },
+            {
+              "name": "Like Comment",
+              "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/comments/{{commentId}}/like" }
+            },
+            {
+              "name": "Get My Comments",
+              "request": { 
+                "method": "GET", 
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/comments/my?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "comments", "my"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Share Song",
+              "request": { "method": "POST", "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/share" }
+            },
+            {
+              "name": "Get User Activity",
+              "request": { 
+                "method": "GET", 
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ], 
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/activity?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "activity"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                }
+              }
+            }
+          ]
         }
       ]
     },
@@ -241,7 +537,9 @@
     { "key": "artistName", "value": "Sơn Tùng M-TP" },
     { "key": "songDbId", "value": "" },
     { "key": "artistDbId", "value": "" },
-    { "key": "userId", "value": "" }
+    { "key": "userId", "value": "" },
+    { "key": "commentId", "value": "" },
+    { "key": "searchQuery", "value": "Sơn Tùng M-TP" }
   ]
 }
 
