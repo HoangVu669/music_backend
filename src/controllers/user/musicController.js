@@ -51,48 +51,6 @@ const getNewReleaseChartData = async (req, res) => {
 };
 
 // ===== SONG DETAILS =====
-const getSongDetails = async (req, res) => {
-  try {
-    const { songId } = req.params;
-    
-    // Get complete song info (metadata + lyric) from Zing API
-    const songInfo = await getCompleteSongInfo(songId);
-    
-    // Check if song exists in our DB, if not create it
-    let song = await Song.findOne({ songId });
-    if (!song) {
-      song = await Song.create({
-        songId,
-        title: songInfo.data?.title || 'Unknown',
-        artist: songInfo.data?.artistsNames || 'Unknown',
-        artistId: songInfo.data?.artists?.[0]?.id,
-        album: songInfo.data?.album?.title,
-        albumId: songInfo.data?.album?.id,
-        duration: songInfo.data?.duration,
-        thumbnail: songInfo.data?.thumbnail
-      });
-    }
-    
-    // Record user interaction if user is logged in
-    if (req.user) {
-      await UserInteraction.findOneAndUpdate(
-        { userId: req.user.id, songId, action: 'play' },
-        { 
-          $inc: { 'metadata.playCount': 1 },
-          $set: { 'metadata.lastPlayedAt': new Date() }
-        },
-        { upsert: true }
-      );
-    }
-    
-    res.json(formatResponse(true, 'Song details retrieved successfully', {
-      ...songInfo,
-      localData: song
-    }));
-  } catch (error) {
-    res.status(500).json(formatResponse(false, 'Failed to get song details', null, error.message));
-  }
-};
 
 const getSongInfoOnly = async (req, res) => {
   try {
@@ -184,32 +142,54 @@ const likeSong = async (req, res) => {
     });
     
     if (existingInteraction) {
-      // Unlike the song
-      await UserInteraction.deleteOne({ _id: existingInteraction._id });
-      await Song.findOneAndUpdate(
-        { songId },
-        { $inc: { likeCount: -1 } }
-      );
-      
-      return res.json(formatResponse(true, 'Song unliked successfully', { liked: false }));
-    } else {
-      // Like the song
-      await UserInteraction.create({
-        userId,
-        songId,
-        action: 'like'
-      });
-      
-      await Song.findOneAndUpdate(
-        { songId },
-        { $inc: { likeCount: 1 } },
-        { upsert: true }
-      );
-      
-      return res.json(formatResponse(true, 'Song liked successfully', { liked: true }));
+      return res.status(400).json(formatResponse(false, 'Song already liked', { liked: true }));
     }
+    
+    // Like the song
+    await UserInteraction.create({
+      userId,
+      songId,
+      action: 'like'
+    });
+    
+    await Song.findOneAndUpdate(
+      { songId },
+      { $inc: { likeCount: 1 } },
+      { upsert: true }
+    );
+    
+    return res.json(formatResponse(true, 'Song liked successfully', { liked: true }));
   } catch (error) {
-    res.status(500).json(formatResponse(false, 'Failed to like/unlike song', null, error.message));
+    res.status(500).json(formatResponse(false, 'Failed to like song', null, error.message));
+  }
+};
+
+const unlikeSong = async (req, res) => {
+  try {
+    const { songId } = req.params;
+    const userId = req.user.id;
+    
+    // Check if user has liked this song
+    const existingInteraction = await UserInteraction.findOne({
+      userId,
+      songId,
+      action: 'like'
+    });
+    
+    if (!existingInteraction) {
+      return res.status(400).json(formatResponse(false, 'Song not liked yet', { liked: false }));
+    }
+    
+    // Unlike the song
+    await UserInteraction.deleteOne({ _id: existingInteraction._id });
+    await Song.findOneAndUpdate(
+      { songId },
+      { $inc: { likeCount: -1 } }
+    );
+    
+    return res.json(formatResponse(true, 'Song unliked successfully', { liked: false }));
+  } catch (error) {
+    res.status(500).json(formatResponse(false, 'Failed to unlike song', null, error.message));
   }
 };
 
@@ -226,7 +206,27 @@ const getUserLikedSongs = async (req, res) => {
     .limit(limit * 1)
     .skip((page - 1) * limit);
     
-    const songIds = interactions.map(interaction => interaction.songId);
+    // Filter out invalid songIds and log them
+    const validInteractions = interactions.filter(interaction => {
+      if (!interaction.songId || interaction.songId === 'liked' || interaction.songId.length < 3) {
+        console.warn(`Invalid songId found: ${interaction.songId}, removing from results`);
+        return false;
+      }
+      return true;
+    });
+    
+    const songIds = validInteractions.map(interaction => interaction.songId);
+    
+    if (songIds.length === 0) {
+      return res.json(formatResponse(true, 'No liked songs found', {
+        songs: [],
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: 0
+        }
+      }));
+    }
     
     // Get song details from Zing API for each liked song
     const songPromises = songIds.map(async (songId) => {
@@ -235,7 +235,7 @@ const getUserLikedSongs = async (req, res) => {
         return {
           songId,
           ...songInfo,
-          likedAt: interactions.find(i => i.songId === songId).createdAt
+          likedAt: validInteractions.find(i => i.songId === songId).createdAt
         };
       } catch (error) {
         console.error(`Error getting song ${songId}:`, error);
@@ -250,7 +250,7 @@ const getUserLikedSongs = async (req, res) => {
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: interactions.length
+        total: validInteractions.length
       }
     }));
   } catch (error) {
@@ -266,7 +266,6 @@ module.exports = {
   getNewReleaseChartData,
   
   // Song Details
-  getSongDetails,
   getSongInfoOnly,
   getSongLyricOnly,
   getStreamingUrl,
@@ -276,5 +275,6 @@ module.exports = {
   
   // User Interactions
   likeSong,
+  unlikeSong,
   getUserLikedSongs,
 };

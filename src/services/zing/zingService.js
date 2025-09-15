@@ -14,9 +14,9 @@ async function getSongInfo(id) {
 // Get streaming URL (audio link to play music)
 async function getSong(id) {
   try {
-    return await ZingMp3.getStreaming(id);
+    return await ZingMp3.getSong(id);
   } catch (error) {
-    console.error('Error getting song streaming URL:', error);
+    console.error('Error getting song URL:', error);
     throw error;
   }
 }

@@ -111,25 +111,12 @@
           "description": "Song-related endpoints. Note: getSong() = streaming URL, getSongInfo() = metadata only",
           "item": [
             {
-              "name": "Get Song Details (Info + Lyric)",
+              "name": "Get Song Info (Metadata)",
               "request": { 
                 "method": "GET", 
                 "header": [], 
                 "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}",
-                "description": "Get complete song information including metadata and lyrics"
-              }
-            },
-            {
-              "name": "Get Song Info Only (Metadata)",
-              "request": { 
-                "method": "GET", 
-                "header": [], 
-                "url": {
-                  "raw": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/info",
-                  "host": ["{{baseUrl}}"],
-                  "path": ["api", "v1", "user", "songs", "{{zingSongId}}", "info"]
-                },
-                "description": "Get only song metadata (title, artist, album, duration, thumbnail) without lyrics"
+                "description": "Get song metadata (title, artist, album, duration, thumbnail) without lyrics"
               }
             },
             {
@@ -160,11 +147,21 @@
               }
             },
             {
-              "name": "Like/Unlike Song",
+              "name": "Like Song",
           "request": {
             "method": "POST",
             "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
-            "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/like"
+            "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/like",
+            "description": "Like a song. Returns error if already liked."
+          }
+        },
+        {
+              "name": "Unlike Song",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+            "url": "{{baseUrl}}/api/v1/user/songs/{{zingSongId}}/like",
+            "description": "Unlike a song. Returns error if not liked yet."
           }
         },
         {
@@ -341,6 +338,139 @@
                     {"key": "limit", "value": "20"}
                   ]
                 }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Group Listening",
+          "item": [
+            {
+              "name": "Create Group",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Nhóm nghe nhạc vui vẻ\",\n  \"description\": \"Cùng nghe nhạc\",\n  \"settings\": { \n    \"isPublic\": true, \n    \"maxMembers\": 20, \n    \"allowMembersAddSongs\": true, \n    \"allowMembersSkip\": true \n  }\n}"
+                },
+                "url": "{{baseUrl}}/api/v1/user/groups",
+                "description": "Create a new listening group"
+              }
+            },
+            {
+              "name": "Get Public Groups",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/api/v1/user/groups/public?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["api", "v1", "user", "groups", "public"],
+                  "query": [
+                    {"key": "page", "value": "1"},
+                    {"key": "limit", "value": "20"}
+                  ]
+                },
+                "description": "List public groups"
+              }
+            },
+            {
+              "name": "Get My Groups",
+              "request": {
+                "method": "GET",
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+                "url": "{{baseUrl}}/api/v1/user/groups/my",
+                "description": "List my groups (hosted/joined)"
+              }
+            },
+            {
+              "name": "Get Group Details",
+              "request": {
+                "method": "GET",
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}",
+                "description": "Get group details"
+              }
+            },
+            {
+              "name": "Join Group",
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}/join",
+                "description": "Join a group"
+              }
+            },
+            {
+              "name": "Leave Group",
+              "request": {
+                "method": "POST",
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}/leave",
+                "description": "Leave a group"
+              }
+            },
+            {
+              "name": "Update Group Settings",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Tên mới\",\n  \"description\": \"Mô tả mới\",\n  \"settings\": { \n    \"allowMembersAddSongs\": false \n  }\n}"
+                },
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}/settings",
+                "description": "Update group settings (host only)"
+              }
+            },
+            {
+              "name": "Delete Group",
+              "request": {
+                "method": "DELETE",
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}",
+                "description": "Delete a group (host only)"
+              }
+            },
+            {
+              "name": "Add Song to Queue",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{userToken}}" },
+                  { "key": "Content-Type", "value": "application/json" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"songId\": \"{{zingSongId}}\"\n}"
+                },
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}/queue",
+                "description": "Add a song to group queue"
+              }
+            },
+            {
+              "name": "Remove Song from Queue",
+              "request": {
+                "method": "DELETE",
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}/queue/{{songIndex}}",
+                "description": "Remove a song from group queue"
+              }
+            },
+            {
+              "name": "Get Group Queue",
+              "request": {
+                "method": "GET",
+                "header": [ { "key": "Authorization", "value": "Bearer {{userToken}}" } ],
+                "url": "{{baseUrl}}/api/v1/user/groups/{{groupId}}/queue",
+                "description": "Get current song and queue"
               }
             }
           ]

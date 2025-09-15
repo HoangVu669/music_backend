@@ -6,6 +6,7 @@ const music = require('../../controllers/user/musicController');
 const playlist = require('../../controllers/user/playlistController');
 const artist = require('../../controllers/user/artistController');
 const social = require('../../controllers/user/socialController');
+const group = require('../../controllers/user/groupController');
 
 const router = express.Router();
 
@@ -22,12 +23,12 @@ router.get('/charts/home', music.getChartHomeData);
 router.get('/charts/new-release', music.getNewReleaseChartData);
 
 // Song Details
-router.get('/songs/:songId', music.getSongDetails);
-router.get('/songs/:songId/info', music.getSongInfoOnly);
+router.get('/songs/liked', authMiddleware(), music.getUserLikedSongs);
+router.get('/songs/:songId', music.getSongInfoOnly);
 router.get('/songs/:songId/lyric', music.getSongLyricOnly);
 router.get('/songs/:songId/stream', music.getStreamingUrl);
 router.post('/songs/:songId/like', authMiddleware(), music.likeSong);
-router.get('/songs/liked', authMiddleware(), music.getUserLikedSongs);
+router.delete('/songs/:songId/like', authMiddleware(), music.unlikeSong);
 
 // Search
 router.get('/search', music.searchMusic);
@@ -47,7 +48,7 @@ router.get('/artists/:artistId', artist.getArtistDetails);
 router.get('/artists/:artistId/songs', artist.getArtistSongs);
 router.get('/artists/:artistId/playlists', artist.getArtistPlaylists);
 router.post('/artists/:artistId/follow', authMiddleware(), artist.followArtist);
-router.get('/artists/followed', authMiddleware(), artist.getFollowedArtists);
+router.get('/artists/followed', authMiddleware(), artist.getFollowedArtists); 
 router.get('/artists/popular', artist.getPopularArtists);
 
 // ===== SOCIAL FEATURES =====
@@ -62,6 +63,19 @@ router.post('/comments/:commentId/like', authMiddleware(), social.likeComment);
 router.get('/comments/my', authMiddleware(), social.getUserComments);
 router.post('/songs/:songId/share', authMiddleware(), social.shareSong);
 router.get('/activity', authMiddleware(), social.getUserActivity);
+
+// ===== GROUP LISTENING (Real-time) =====
+router.post('/groups', authMiddleware(), group.createGroup);
+router.get('/groups/public', group.getPublicGroups);
+router.get('/groups/my', authMiddleware(), group.getUserGroups);
+router.get('/groups/:groupId', authMiddleware(), group.getGroupDetails);
+router.post('/groups/:groupId/join', authMiddleware(), group.joinGroup);
+router.post('/groups/:groupId/leave', authMiddleware(), group.leaveGroup);
+router.put('/groups/:groupId/settings', authMiddleware(), group.updateGroupSettings);
+router.delete('/groups/:groupId', authMiddleware(), group.deleteGroup);
+router.post('/groups/:groupId/queue', authMiddleware(), group.addSongToQueue);
+router.delete('/groups/:groupId/queue/:songIndex', authMiddleware(), group.removeSongFromQueue);
+router.get('/groups/:groupId/queue', authMiddleware(), group.getGroupQueue);
 
 module.exports = router;
 
