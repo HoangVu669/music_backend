@@ -1,23 +1,34 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const ArtistSchema = new mongoose.Schema(
   {
-    artistId: { type: String, unique: true, index: true }, // zing artist id
-    name: { type: String, required: true },
-    bio: { type: String },
+    artistId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    name: {
+      type: String,
+      required: true,
+      index: true,
+    },
     thumbnail: { type: String },
-    followerCount: { type: Number, default: 0 },
-    songCount: { type: Number, default: 0 },
-    isActive: { type: Boolean, default: true },
-    lastSynced: { type: Date, default: Date.now },
+
+    followerCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    collection: "artists",
+  }
 );
 
-// Index for better performance
-ArtistSchema.index({ name: 'text' });
+// Text index với default_language để tránh lỗi language override
+ArtistSchema.index({ name: "text" }, { default_language: "none" });
 ArtistSchema.index({ followerCount: -1 });
 
-module.exports = mongoose.model('Artist', ArtistSchema);
-
-
+module.exports = mongoose.model("Artist", ArtistSchema);

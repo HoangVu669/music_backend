@@ -1,44 +1,121 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const { USER_STATUS, GENDER } = require("./Enum");
+const {
+  generateUniqueRandomId,
+  generateActivationCode,
+} = require("../utils/generateId");
 
+/**
+ * User Model - Quản lý user cho mobile app
+ * TÁCH RIÊNG với Admin model
+ * Học từ e-commerce: có id (number), methods, pre-save hooks
+ */
 const UserSchema = new mongoose.Schema(
   {
-    username: { type: String, required: true, unique: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true },
-    passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['user', 'admin'], default: 'user' },
-    isLocked: { type: Boolean, default: false },
-    profile: {
-      displayName: { type: String },
-      avatar: { type: String },
-      bio: { type: String },
-      dateOfBirth: { type: Date },
-      gender: { type: String, enum: ['male', 'female', 'other'] }
+    id: {
+      type: Number,
+      unique: true,
+      index: true,
     },
-    preferences: {
-      language: { type: String, default: 'vi' },
-      theme: { type: String, default: 'light' },
-      autoPlay: { type: Boolean, default: true },
-      notifications: {
-        email: { type: Boolean, default: true },
-        push: { type: Boolean, default: true }
-      }
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      index: true,
     },
-    stats: {
-      totalPlayTime: { type: Number, default: 0 }, // in seconds
-      totalSongsPlayed: { type: Number, default: 0 },
-      totalPlaylistsCreated: { type: Number, default: 0 },
-      totalComments: { type: Number, default: 0 }
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      index: true,
     },
-    isActive: { type: Boolean, default: true },
-    lastLoginAt: { type: Date },
+    password: {
+      type: String,
+      required: true,
+    },
+    status: {
+      type: String,
+      enum: Object.values(USER_STATUS),
+      default: USER_STATUS.PENDING_VERIFICATION,
+      index: true,
+    },
+    fullname: {
+      type: String,
+      trim: true,
+    },
+    avatar: {
+      type: String,
+      lowercase: true,
+    },
+    bio: {
+      type: String,
+      maxlength: 500,
+    },
+    dateOfBirth: { type: Date },
+    gender: {
+      type: String,
+      enum: Object.values(GENDER),
+    },
+    phone: {
+      type: String,
+      trim: true,
+    },
+    activationCode: {
+      type: String,
+      default: function () {
+        return generateActivationCode();
+      },
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    collection: "users",
+  }
 );
 
-// Index for better performance
-UserSchema.index({ username: 'text', email: 'text' });
-UserSchema.index({ isActive: 1, role: 1 });
+// ===== PRE-SAVE HOOKS =====
+UserSchema.pre("save", async function (next) {
+  // Generate unique ID for new documents
+  if (this.isNew && !this.id) {
+    this.id = await generateUniqueRandomId(this.constructor, "id");
+  }
 
-module.exports = mongoose.model('User', UserSchema);
+  // Hash password if modified
+  if (!this.isModified("password")) {
+    return next();
+  }
 
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
 
+// ===== INSTANCE METHODS =====
+UserSchema.methods.matchPassword = async function (enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+UserSchema.methods.generateActivationCode = function () {
+  this.activationCode = generateActivationCode();
+  return this.activationCode;
+};
+
+UserSchema.methods.isLocked = function () {
+  return this.status === USER_STATUS.LOCKED;
+};
+
+UserSchema.methods.isActive = function () {
+  return this.status === USER_STATUS.ACTIVE;
+};
+
+// ===== INDEXES =====
+UserSchema.index({ username: "text", email: "text", fullname: "text" });
+UserSchema.index({ status: 1 });
+UserSchema.index({ createdAt: -1 });
+UserSchema.index({ id: 1 }, { unique: true });
+
+module.exports = mongoose.model("User", UserSchema);

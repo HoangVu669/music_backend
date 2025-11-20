@@ -1,78 +1,120 @@
+/**
+ * Admin User Controller
+ */
 const User = require('../../models/User');
-const { hashPassword } = require('../../utils/bcrypt');
+const formatResponse = require('../../utils/formatResponse');
+const { USER_STATUS } = require('../../models/Enum');
 
-async function listUsers(req, res, next) {
-  try {
-    const users = await User.find();
-    res.json({ success: true, data: users });
-  } catch (err) { next(err); }
+class AdminUserController {
+  async listUsers(req, res, next) {
+    try {
+      const { page = 1, limit = 20, status, search } = req.query;
+      const skip = (page - 1) * limit;
+
+      const query = {};
+      if (status) query.status = status;
+      if (search) {
+        query.$or = [
+          { username: { $regex: search, $options: 'i' } },
+          { email: { $regex: search, $options: 'i' } },
+          { fullname: { $regex: search, $options: 'i' } },
+        ];
+      }
+
+      const users = await User.find(query)
+        .select('-password -activationCode -passwordResetToken')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+
+      const total = await User.countDocuments(query);
+
+      res.json(formatResponse.success({ users, total, page: parseInt(page), limit: parseInt(limit) }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createUser(req, res, next) {
+    try {
+      const { username, email, password, fullname } = req.body;
+      const user = await User.create({ username, email, password, fullname });
+      res.status(201).json(formatResponse.success({ user }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getUserById(req, res, next) {
+    try {
+      const user = await User.findOne({ id: req.params.id }).select('-password');
+      if (!user) return res.status(404).json(formatResponse.failure('User not found', 404));
+      res.json(formatResponse.success({ user }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async updateUserById(req, res, next) {
+    try {
+      const user = await User.findOne({ id: req.params.id });
+      if (!user) return res.status(404).json(formatResponse.failure('User not found', 404));
+      Object.assign(user, req.body);
+      await user.save();
+      res.json(formatResponse.success({ user }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async deleteUserById(req, res, next) {
+    try {
+      const user = await User.findOne({ id: req.params.id });
+      if (!user) return res.status(404).json(formatResponse.failure('User not found', 404));
+      await User.deleteOne({ id: req.params.id });
+      res.json(formatResponse.success({ deleted: true }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async lockUser(req, res, next) {
+    try {
+      const user = await User.findOne({ id: req.params.id });
+      if (!user) return res.status(404).json(formatResponse.failure('User not found', 404));
+      user.status = USER_STATUS.LOCKED;
+      await user.save();
+      res.json(formatResponse.success({ user }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async unlockUser(req, res, next) {
+    try {
+      const user = await User.findOne({ id: req.params.id });
+      if (!user) return res.status(404).json(formatResponse.failure('User not found', 404));
+      user.status = USER_STATUS.ACTIVE;
+      await user.save();
+      res.json(formatResponse.success({ user }));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async resetPassword(req, res, next) {
+    try {
+      const user = await User.findOne({ id: req.params.id });
+      if (!user) return res.status(404).json(formatResponse.failure('User not found', 404));
+      const { newPassword } = req.body;
+      user.password = newPassword;
+      await user.save();
+      res.json(formatResponse.success({ message: 'Password reset successfully' }));
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
-async function createUser(req, res, next) {
-  try {
-    const { username, email, password, role } = req.body;
-    const passwordHash = await hashPassword(password || '123456');
-    const user = await User.create({ username, email, passwordHash, role: role || 'user' });
-    res.status(201).json({ success: true, data: user });
-  } catch (err) { next(err); }
-}
-
-async function getUserById(req, res, next) {
-  try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: user });
-  } catch (err) { next(err); }
-}
-
-async function updateUserById(req, res, next) {
-  try {
-    const { email, role } = req.body;
-    const user = await User.findByIdAndUpdate(req.params.id, { email, role }, { new: true });
-    if (!user) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, data: user });
-  } catch (err) { next(err); }
-}
-
-async function deleteUserById(req, res, next) {
-  try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: 'Not found' });
-    res.json({ success: true, message: 'Deleted' });
-  } catch (err) { next(err); }
-}
-
-async function lockUser(req, res, next) {
-  try {
-    const user = await User.findByIdAndUpdate(req.params.id, { isLocked: true }, { new: true });
-    res.json({ success: true, data: user });
-  } catch (err) { next(err); }
-}
-
-async function unlockUser(req, res, next) {
-  try {
-    const user = await User.findByIdAndUpdate(req.params.id, { isLocked: false }, { new: true });
-    res.json({ success: true, data: user });
-  } catch (err) { next(err); }
-}
-
-async function resetPassword(req, res, next) {
-  try {
-    const passwordHash = await hashPassword('123456');
-    const user = await User.findByIdAndUpdate(req.params.id, { passwordHash }, { new: true });
-    res.json({ success: true, data: user });
-  } catch (err) { next(err); }
-}
-
-module.exports = {
-  listUsers,
-  createUser,
-  getUserById,
-  updateUserById,
-  deleteUserById,
-  lockUser,
-  unlockUser,
-  resetPassword,
-};
-
+module.exports = new AdminUserController();
 

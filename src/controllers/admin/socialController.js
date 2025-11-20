@@ -1,24 +1,32 @@
-const User = require('../../models/User');
-const Comment = require('../../models/Comment');
+/**
+ * Admin Social Controller
+ */
+const SongComment = require('../../models/SongComment');
+const SongLike = require('../../models/SongLike');
+const UserFollow = require('../../models/UserFollow');
+const formatResponse = require('../../utils/formatResponse');
 
-async function getSocialStats(req, res, next) {
-  try {
-    const [likesAgg, followsAgg, commentsCount] = await Promise.all([
-      User.aggregate([{ $unwind: '$likedSongs' }, { $count: 'totalLikes' }]),
-      User.aggregate([{ $unwind: '$followedArtists' }, { $count: 'totalFollows' }]),
-      Comment.countDocuments(),
-    ]);
-    res.json({
-      success: true,
-      data: {
-        totalLikes: likesAgg[0]?.totalLikes || 0,
-        totalFollows: followsAgg[0]?.totalFollows || 0,
-        totalComments: commentsCount,
-      },
-    });
-  } catch (e) { next(e); }
+class AdminSocialController {
+  async getSocialStats(req, res, next) {
+    try {
+      const totalComments = await SongComment.countDocuments();
+      const totalLikes = await SongLike.countDocuments();
+      const totalFollows = await UserFollow.countDocuments();
+
+      res.json(
+        formatResponse.success({
+          stats: {
+            totalComments,
+            totalLikes,
+            totalFollows,
+          },
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
-module.exports = { getSocialStats };
-
+module.exports = new AdminSocialController();
 

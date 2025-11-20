@@ -1,27 +1,65 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const PlaylistSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    description: { type: String },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    songs: [{ 
-      songId: { type: String, required: true }, // zing song id
-      addedAt: { type: Date, default: Date.now }
-    }],
-    isPublic: { type: Boolean, default: false },
+    playlistId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      index: true,
+    },
     thumbnail: { type: String },
-    playCount: { type: Number, default: 0 },
-    likeCount: { type: Number, default: 0 },
-    isActive: { type: Boolean, default: true },
+    description: { type: String },
+
+    userId: { type: String, index: true },
+    isPublic: {
+      type: Boolean,
+      default: true,
+      index: true,
+    },
+
+    songIds: [{ type: String, index: true }],
+    songCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+
+    genres: [{ type: String, index: true }],
+
+    likeCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    followCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    playCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    collection: "playlists",
+  }
 );
 
-// Index for better performance
-PlaylistSchema.index({ userId: 1, isActive: 1 });
-PlaylistSchema.index({ isPublic: 1, likeCount: -1 });
+// Text index với default_language để tránh lỗi language override
+PlaylistSchema.index({ title: "text" }, { default_language: "none" });
+PlaylistSchema.index({ userId: 1, isPublic: 1 });
+PlaylistSchema.index({ songCount: -1 });
+PlaylistSchema.index({ likeCount: -1 });
+PlaylistSchema.index({ followCount: -1 });
+PlaylistSchema.index({ playCount: -1 });
 
-module.exports = mongoose.model('Playlist', PlaylistSchema);
-
-
+module.exports = mongoose.model("Playlist", PlaylistSchema);

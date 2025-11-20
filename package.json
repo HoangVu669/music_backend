@@ -5,7 +5,14 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "nodemon src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "crawl": "node src/schedule/index.js",
+    "crawl:songs": "node src/schedule/index.js songs",
+    "crawl:artists": "node src/schedule/index.js artists",
+    "crawl:albums": "node src/schedule/index.js albums",
+    "crawl:playlists": "node src/schedule/index.js playlists",
+    "crawl:mvs": "node src/schedule/index.js mvs",
+    "crawl:schedule": "node src/schedule/index.js schedule"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +28,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
     "morgan": "^1.10.1",
+    "node-cron": "^3.0.3",
     "socket.io": "^4.8.1",
     "zingmp3-api-full-v3": "^3.0.0"
   },

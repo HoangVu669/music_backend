@@ -1,0 +1,1529 @@
+{
+	"info": {
+		"_postman_id": "music-app-api-collection",
+		"name": "Music App - User API",
+		"description": "Collection đầy đủ cho Music App API - User endpoints\n\nBase URL: http://localhost:4000/api/v1/user\n\nAuthentication: Bearer Token trong header Authorization\n\nTổng số API: 59 endpoints\n- Authentication: 3\n- Home & Discovery: 4\n- Songs: 7\n- Discovery (Artist, Album, Playlist ZingMp3, MV, Suggest): 8\n- Rooms: 9\n- Social Features: 16 (Comments: 4, Likes: 4, Follow: 3, Share: 1, Notifications: 4)\n- Playlists: 10",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "music-app"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"testuser\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\",\n  \"fullname\": \"Test User\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/register",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/login",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "auth", "login"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set(\"auth_token\", jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Update Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"fullname\": \"Updated Name\",\n  \"avatar\": \"https://example.com/avatar.jpg\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/auth/profile",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "auth", "profile"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Home & Discovery",
+			"item": [
+				{
+					"name": "Get Home",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/home",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "home"]
+						},
+						"description": "Lấy dữ liệu trang chủ ZingMp3 với đầy đủ sections (songStation, new-release, RTChart, playlist, etc.)"
+					}
+				},
+				{
+					"name": "Get Top 100",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/charts/top100",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "charts", "top100"]
+						},
+						"description": "Lấy Top 100 bài hát từ ZingMp3 (theo các nhóm: Việt Nam, US-UK, K-Pop, etc.)"
+					}
+				},
+				{
+					"name": "Get Chart Home",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/charts/home",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "charts", "home"]
+						},
+						"description": "Lấy bảng xếp hạng trang chủ (RTChart) và Week Chart (VN, US, Korea)"
+					}
+				},
+				{
+					"name": "Get New Release Chart",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/charts/new-release",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "charts", "new-release"]
+						},
+						"description": "Lấy bảng xếp hạng bài hát mới phát hành từ ZingMp3"
+					}
+				}
+			]
+		},
+		{
+			"name": "Songs",
+			"item": [
+				{
+					"name": "Get Song (with streaming URL)",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/songs/:songId?cache=true",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "songs", ":songId"],
+							"query": [
+								{
+									"key": "cache",
+									"value": "true",
+									"description": "true (default) hoặc false"
+								}
+							],
+							"variable": [
+								{
+									"key": "songId",
+									"value": "Z6Z0F6F6",
+									"description": "Song ID từ ZingMp3"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Streaming URL",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/songs/:songId/stream?cache=true",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "songs", ":songId", "stream"],
+							"query": [
+								{
+									"key": "cache",
+									"value": "true"
+								}
+							],
+							"variable": [
+								{
+									"key": "songId",
+									"value": "Z6Z0F6F6"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Lyric",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/songs/:songId/lyric",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "songs", ":songId", "lyric"],
+							"variable": [
+								{
+									"key": "songId",
+									"value": "Z6Z0F6F6"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Search Songs (ZingMp3)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/songs/search?keyword=Sơn Tùng&limit=20",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "songs", "search"],
+							"query": [
+								{
+									"key": "keyword",
+									"value": "Sơn Tùng",
+									"description": "Từ khóa tìm kiếm (bắt buộc)"
+								},
+								{
+									"key": "limit",
+									"value": "20",
+									"description": "Số lượng kết quả (optional)"
+								}
+							]
+						},
+						"description": "Tìm kiếm bài hát, playlist, artist, video từ ZingMp3. Trả về: top, songs, playlists, artists, videos"
+					}
+				},
+				{
+					"name": "Get Popular Songs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/songs/popular?limit=20",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "songs", "popular"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get New Releases",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/songs/new-releases?limit=20",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "songs", "new-releases"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Track Play History",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"playDuration\": 120,\n  \"playPercentage\": 50,\n  \"isCompleted\": false,\n  \"isSkipped\": false,\n  \"context\": \"other\",\n  \"device\": \"mobile\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/songs/:songId/play",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "songs", ":songId", "play"],
+							"variable": [
+								{
+									"key": "songId",
+									"value": "Z6Z0F6F6"
+								}
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Discovery (Artist, Album, Playlist ZingMp3, MV, Suggest)",
+			"item": [
+				{
+					"name": "Get Artist",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/artists?name=Sơn Tùng M-TP",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "artists"],
+							"query": [
+								{
+									"key": "name",
+									"value": "Sơn Tùng M-TP",
+									"description": "Tên nghệ sĩ (bắt buộc)"
+								}
+							]
+						},
+						"description": "Lấy thông tin nghệ sĩ từ ZingMp3"
+					}
+				},
+				{
+					"name": "Get Artist Songs",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/artists/:artistId/songs?page=1&count=20",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "artists", ":artistId", "songs"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "count",
+									"value": "20"
+								}
+							],
+							"variable": [
+								{
+									"key": "artistId",
+									"value": "IWZ9Z08I",
+									"description": "Artist ID từ ZingMp3"
+								}
+							]
+						},
+						"description": "Lấy danh sách bài hát của nghệ sĩ từ ZingMp3"
+					}
+				},
+				{
+					"name": "Get Album",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/albums/:albumId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "albums", ":albumId"],
+							"variable": [
+								{
+									"key": "albumId",
+									"value": "6BOWDZ6Z",
+									"description": "Album ID từ ZingMp3"
+								}
+							]
+						},
+						"description": "Lấy chi tiết album từ ZingMp3 (album cũng là playlist trong ZingMp3)"
+					}
+				},
+				{
+					"name": "Get ZingMp3 Playlist",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/playlists/zing/:playlistId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", "zing", ":playlistId"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "6BOWDZ6Z",
+									"description": "Playlist ID từ ZingMp3"
+								}
+							]
+						},
+						"description": "Lấy chi tiết playlist từ ZingMp3"
+					}
+				},
+				{
+					"name": "Get List MV",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/mv?id=IWZ9Z08I&page=1&count=20",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "mv"],
+							"query": [
+								{
+									"key": "id",
+									"value": "IWZ9Z08I",
+									"description": "ID (bắt buộc)"
+								},
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "count",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Lấy danh sách MV từ ZingMp3"
+					}
+				},
+				{
+					"name": "Get MV Category",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/mv/category?id=IWZ9Z08I",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "mv", "category"],
+							"query": [
+								{
+									"key": "id",
+									"value": "IWZ9Z08I",
+									"description": "Category ID (bắt buộc)"
+								}
+							]
+						},
+						"description": "Lấy danh mục MV từ ZingMp3"
+					}
+				},
+				{
+					"name": "Get Video",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/video/:videoId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "video", ":videoId"],
+							"variable": [
+								{
+									"key": "videoId",
+									"value": "ZW9CI8D6",
+									"description": "Video ID từ ZingMp3"
+								}
+							]
+						},
+						"description": "Lấy link video từ ZingMp3"
+					}
+				},
+				{
+					"name": "Get Suggest Keyword",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/search/suggest",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "search", "suggest"]
+						},
+						"description": "Lấy từ khóa gợi ý tìm kiếm từ ZingMp3"
+					}
+				}
+			]
+		},
+		{
+			"name": "Rooms (Real-time Group Listening)",
+			"item": [
+				{
+					"name": "Create Room",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"My Music Room\",\n  \"description\": \"Room để nghe nhạc cùng nhau\",\n  \"isPrivate\": false,\n  \"maxMembers\": 50\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/rooms",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.roomId) {",
+									"        pm.environment.set(\"room_id\", jsonData.data.roomId);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get Room Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/rooms/:roomId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", ":roomId"],
+							"variable": [
+								{
+									"key": "roomId",
+									"value": "{{room_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Join Room",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/rooms/:roomId/join",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", ":roomId", "join"],
+							"variable": [
+								{
+									"key": "roomId",
+									"value": "{{room_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Leave Room",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/rooms/:roomId/leave",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", ":roomId", "leave"],
+							"variable": [
+								{
+									"key": "roomId",
+									"value": "{{room_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Playback State",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"currentSongId\": \"Z6Z0F6F6\",\n  \"currentPosition\": 120,\n  \"isPlaying\": true\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/rooms/:roomId/playback",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", ":roomId", "playback"],
+							"variable": [
+								{
+									"key": "roomId",
+									"value": "{{room_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Add Song to Queue",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"songId\": \"Z6Z0F6F6\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/rooms/:roomId/queue",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", ":roomId", "queue"],
+							"variable": [
+								{
+									"key": "roomId",
+									"value": "{{room_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Remove Song from Queue",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/rooms/:roomId/queue/:songId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", ":roomId", "queue", ":songId"],
+							"variable": [
+								{
+									"key": "roomId",
+									"value": "{{room_id}}"
+								},
+								{
+									"key": "songId",
+									"value": "Z6Z0F6F6"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Public Rooms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/rooms/public?limit=20",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", "public"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get My Rooms",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/rooms/my-rooms",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "rooms", "my-rooms"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Social Features",
+			"item": [
+				{
+					"name": "Comments",
+					"item": [
+						{
+							"name": "Comment Song",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"content\": \"Bài hát hay quá!\",\n  \"timestamp\": 120\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/songs/:songId/comments",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "songs", ":songId", "comments"],
+									"variable": [
+										{
+											"key": "songId",
+											"value": "Z6Z0F6F6"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Song Comments",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/songs/:songId/comments?page=1&limit=20",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "songs", ":songId", "comments"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									],
+									"variable": [
+										{
+											"key": "songId",
+											"value": "Z6Z0F6F6"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Reply Comment",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"songId\": \"Z6Z0F6F6\",\n  \"content\": \"Đồng ý!\",\n  \"mentionedUserId\": \"user123\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/comments/:commentId/reply",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "comments", ":commentId", "reply"],
+									"variable": [
+										{
+											"key": "commentId",
+											"value": "123456789"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Like Comment",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/comments/:commentId/like",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "comments", ":commentId", "like"],
+									"variable": [
+										{
+											"key": "commentId",
+											"value": "123456789"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Likes",
+					"item": [
+						{
+							"name": "Like Song",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/songs/:songId/like",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "songs", ":songId", "like"],
+									"variable": [
+										{
+											"key": "songId",
+											"value": "Z6Z0F6F6"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Like Album",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/albums/:albumId/like",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "albums", ":albumId", "like"],
+									"variable": [
+										{
+											"key": "albumId",
+											"value": "album123"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Check User Likes",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/likes?songIds=Z6Z0F6F6,Z6Z0F6F7&albumIds=album1,album2",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "likes"],
+									"query": [
+										{
+											"key": "songIds",
+											"value": "Z6Z0F6F6,Z6Z0F6F7"
+										},
+										{
+											"key": "albumIds",
+											"value": "album1,album2"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Liked Songs",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/likes/songs?page=1&limit=20",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "likes", "songs"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Follow",
+					"item": [
+						{
+							"name": "Follow User",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/users/:userId/follow",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "users", ":userId", "follow"],
+									"variable": [
+										{
+											"key": "userId",
+											"value": "user123"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Follow Artist",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/artists/:artistId/follow",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "artists", ":artistId", "follow"],
+									"variable": [
+										{
+											"key": "artistId",
+											"value": "artist123"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Get Followed Artists",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/follows/artists?page=1&limit=20",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "follows", "artists"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Share",
+					"item": [
+						{
+							"name": "Share Song",
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"shareType\": \"LINK\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/songs/:songId/share",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "songs", ":songId", "share"],
+									"variable": [
+										{
+											"key": "songId",
+											"value": "Z6Z0F6F6"
+										}
+									]
+								}
+							}
+						}
+					]
+				},
+				{
+					"name": "Notifications",
+					"item": [
+						{
+							"name": "Get Notifications",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/notifications?page=1&limit=20",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "notifications"],
+									"query": [
+										{
+											"key": "page",
+											"value": "1"
+										},
+										{
+											"key": "limit",
+											"value": "20"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Mark Notification as Read",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/notifications/:notificationId/read",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "notifications", ":notificationId", "read"],
+									"variable": [
+										{
+											"key": "notificationId",
+											"value": "123456789"
+										}
+									]
+								}
+							}
+						},
+						{
+							"name": "Mark All Notifications as Read",
+							"request": {
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/notifications/read-all",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "notifications", "read-all"]
+								}
+							}
+						},
+						{
+							"name": "Get Unread Count",
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{auth_token}}"
+									}
+								],
+								"url": {
+									"raw": "{{base_url}}/notifications/unread-count",
+									"host": ["{{host}}"],
+									"path": ["api", "v1", "user", "notifications", "unread-count"]
+								}
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Playlists",
+			"item": [
+				{
+					"name": "Create Playlist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"My Favorite Songs\",\n  \"description\": \"Những bài hát yêu thích\",\n  \"isPublic\": true,\n  \"thumbnail\": \"https://example.com/thumb.jpg\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/playlists",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists"]
+						}
+					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.playlistId) {",
+									"        pm.environment.set(\"playlist_id\", jsonData.data.playlistId);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					]
+				},
+				{
+					"name": "Get My Playlists",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/playlists?isPublic=true",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists"],
+							"query": [
+								{
+									"key": "isPublic",
+									"value": "true",
+									"description": "true, false, hoặc bỏ qua để lấy tất cả"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Playlist Details",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Update Playlist",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Updated Title\",\n  \"description\": \"Updated Description\",\n  \"isPublic\": false,\n  \"thumbnail\": \"https://example.com/new-thumb.jpg\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Delete Playlist",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Add Song to Playlist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"songId\": \"Z6Z0F6F6\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId/songs",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId", "songs"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Remove Song from Playlist",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId/songs/:songId",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId", "songs", ":songId"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								},
+								{
+									"key": "songId",
+									"value": "Z6Z0F6F6"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Reorder Playlist Songs",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"songIds\": [\"song1\", \"song2\", \"song3\"]\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId/reorder",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId", "reorder"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Like Playlist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId/like",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId", "like"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Follow Playlist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/playlists/:playlistId/follow",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", ":playlistId", "follow"],
+							"variable": [
+								{
+									"key": "playlistId",
+									"value": "{{playlist_id}}"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Public Playlists",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/playlists/public?limit=20&sortBy=playCount",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", "public"],
+							"query": [
+								{
+									"key": "limit",
+									"value": "20"
+								},
+								{
+									"key": "sortBy",
+									"value": "playCount",
+									"description": "playCount, likeCount, followCount, createdAt"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Get Followed Playlists",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/playlists/followed?page=1&limit=20",
+							"host": ["{{host}}"],
+							"path": ["api", "v1", "user", "playlists", "followed"],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "20"
+								}
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:4000/api/v1/user",
+			"type": "string"
+		},
+		{
+			"key": "host",
+			"value": "localhost:4000",
+			"type": "string"
+		},
+		{
+			"key": "auth_token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "room_id",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "playlist_id",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
+

@@ -1,29 +1,78 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const SongSchema = new mongoose.Schema(
   {
-    songId: { type: String, required: true, unique: true, index: true }, // zing id
-    title: { type: String, required: true },
-    artist: { type: String },
-    artistId: { type: String }, // zing artist id
-    album: { type: String },
-    albumId: { type: String }, // zing album id
-    duration: { type: Number },
+    songId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
+    },
+    title: {
+      type: String,
+      required: true,
+      index: true,
+    },
+
+    artistIds: [{ type: String, index: true }],
+    artistsNames: { type: String }, // Tên nghệ sĩ (string), cho display
+
+    albumId: { type: String, index: true },
+
+    duration: {
+      type: Number,
+      required: true,
+    },
     thumbnail: { type: String },
-    streamingUrl: { type: String }, // cached streaming url
-    streamingUrlExpiry: { type: Date }, // when streaming url expires
-    likeCount: { type: Number, default: 0 },
-    playCount: { type: Number, default: 0 },
-    isActive: { type: Boolean, default: true }, // for soft delete
-    lastSynced: { type: Date, default: Date.now }, // when last synced with zing
+
+    streamingUrl: {
+      type: String,
+      required: false, // Not required - will be fetched on demand
+      index: true,
+    },
+    streamingUrlExpiry: { type: Date },
+
+    lyric: { type: String },
+    hasLyric: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    genres: [{ type: String, index: true }],
+
+    likeCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    listenCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    commentCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
+    shareCount: {
+      type: Number,
+      default: 0,
+      index: true,
+    },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    collection: "songs",
+  }
 );
 
-// Index for better performance
-SongSchema.index({ title: 'text', artist: 'text' });
-SongSchema.index({ lastSynced: 1 });
+// Text index với default_language để tránh lỗi language override
+SongSchema.index({ title: "text" }, { default_language: "none" });
+SongSchema.index({ artistIds: 1 });
+SongSchema.index({ albumId: 1 });
+SongSchema.index({ genres: 1 });
+SongSchema.index({ likeCount: -1, listenCount: -1 });
 
-module.exports = mongoose.model('Song', SongSchema);
-
-
+module.exports = mongoose.model("Song", SongSchema);

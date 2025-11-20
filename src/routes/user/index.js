@@ -1,81 +1,119 @@
 const express = require('express');
 const { authMiddleware } = require('../../middlewares/authMiddleware');
 
+// Import new controllers
+const songController = require('../../controllers/user/songController');
+const roomController = require('../../controllers/user/roomController');
+const socialController = require('../../controllers/user/socialController');
+const playlistController = require('../../controllers/user/playlistController');
+const homeController = require('../../controllers/user/homeController');
+const discoveryController = require('../../controllers/user/discoveryController');
+
+// Keep old controllers for backward compatibility (if needed)
 const auth = require('../../controllers/user/authController');
-const music = require('../../controllers/user/musicController');
-const playlist = require('../../controllers/user/playlistController');
-const artist = require('../../controllers/user/artistController');
-const social = require('../../controllers/user/socialController');
-const group = require('../../controllers/user/groupController');
 
 const router = express.Router();
 
 // ===== AUTHENTICATION =====
 router.post('/auth/register', auth.register);
 router.post('/auth/login', auth.login);
+router.get('/auth/profile', authMiddleware(), auth.getProfile);
 router.put('/auth/profile', authMiddleware(), auth.updateProfile);
 
-// ===== MUSIC & DISCOVERY =====
-// Home & Charts
-router.get('/home', music.getHome);
-router.get('/charts/top100', music.getTop100Songs);
-router.get('/charts/home', music.getChartHomeData);
-router.get('/charts/new-release', music.getNewReleaseChartData);
+// ===== HOME & DISCOVERY =====
+router.get('/home', homeController.getHome);
+router.get('/charts/top100', homeController.getTop100);
+router.get('/charts/home', homeController.getChartHome);
+router.get('/charts/new-release', homeController.getNewReleaseChart);
 
-// Song Details
-router.get('/songs/liked', authMiddleware(), music.getUserLikedSongs);
-router.get('/songs/:songId', music.getSongInfoOnly);
-router.get('/songs/:songId/lyric', music.getSongLyricOnly);
-router.get('/songs/:songId/stream', music.getStreamingUrl);
-router.post('/songs/:songId/like', authMiddleware(), music.likeSong);
-router.delete('/songs/:songId/like', authMiddleware(), music.unlikeSong);
+// ===== SONGS =====
+// IMPORTANT: Đặt các route cụ thể TRƯỚC route có parameter để tránh conflict
+// Search, popular, new-releases phải đứng trước /songs/:songId
+router.get('/songs/search', songController.search);
+router.get('/songs/popular', songController.getPopularSongs);
+router.get('/songs/new-releases', songController.getNewReleases);
+// Các route có parameter đặt sau
+router.get('/songs/:songId', songController.getSong);
+router.get('/songs/:songId/stream', songController.getStreamingUrl);
+router.get('/songs/:songId/lyric', songController.getLyric);
+router.post('/songs/:songId/play', authMiddleware(), songController.trackPlay);
 
-// Search
-router.get('/search', music.searchMusic);
+// ===== DISCOVERY (Artist, Album, Playlist ZingMp3, MV, Suggest) =====
+// Artist
+router.get('/artists', discoveryController.getArtist);
+router.get('/artists/:artistId/songs', discoveryController.getArtistSongs);
 
-// ===== PLAYLISTS =====
-router.post('/playlists', authMiddleware(), playlist.createPlaylist);
-router.get('/playlists', authMiddleware(), playlist.getUserPlaylists);
-router.get('/playlists/public', playlist.getPublicPlaylists);
-router.get('/playlists/:playlistId', authMiddleware(), playlist.getPlaylistDetails);
-router.put('/playlists/:playlistId', authMiddleware(), playlist.updatePlaylist);
-router.delete('/playlists/:playlistId', authMiddleware(), playlist.deletePlaylist);
-router.post('/playlists/:playlistId/songs', authMiddleware(), playlist.addSongToPlaylist);
-router.delete('/playlists/:playlistId/songs/:songId', authMiddleware(), playlist.removeSongFromPlaylist);
+// Album (ZingMp3)
+router.get('/albums/:albumId', discoveryController.getAlbum);
 
-// ===== ARTISTS =====
-router.get('/artists/:artistId', artist.getArtistDetails);
-router.get('/artists/:artistId/songs', artist.getArtistSongs);
-router.get('/artists/:artistId/playlists', artist.getArtistPlaylists);
-router.post('/artists/:artistId/follow', authMiddleware(), artist.followArtist);
-router.get('/artists/followed', authMiddleware(), artist.getFollowedArtists); 
-router.get('/artists/popular', artist.getPopularArtists);
+// ZingMp3 Playlist
+router.get('/playlists/zing/:playlistId', discoveryController.getZingPlaylist);
+
+// MV/Video
+router.get('/mv', discoveryController.getListMV);
+router.get('/mv/category', discoveryController.getCategoryMV);
+router.get('/video/:videoId', discoveryController.getVideo);
+
+// Search Suggest
+router.get('/search/suggest', discoveryController.getSuggestKeyword);
+
+// ===== ROOMS (Real-time Group Listening) =====
+router.post('/rooms', authMiddleware(), roomController.createRoom);
+// Route cụ thể phải đứng trước route có parameter
+router.get('/rooms/public', roomController.getPublicRooms);
+router.get('/rooms/my-rooms', authMiddleware(), roomController.getMyRooms);
+// Route có parameter đặt sau
+router.get('/rooms/:roomId', roomController.getRoom);
+router.post('/rooms/:roomId/join', authMiddleware(), roomController.joinRoom);
+router.post('/rooms/:roomId/leave', authMiddleware(), roomController.leaveRoom);
+router.put('/rooms/:roomId/playback', authMiddleware(), roomController.updatePlayback);
+router.post('/rooms/:roomId/queue', authMiddleware(), roomController.addSongToQueue);
+router.delete('/rooms/:roomId/queue/:songId', authMiddleware(), roomController.removeSongFromQueue);
 
 // ===== SOCIAL FEATURES =====
 // Comments
-router.post('/songs/:songId/comments', authMiddleware(), social.commentOnSong);
-router.get('/songs/:songId/comments', social.getSongComments);
-router.put('/comments/:commentId', authMiddleware(), social.updateComment);
-router.delete('/comments/:commentId', authMiddleware(), social.deleteComment);
-router.post('/comments/:commentId/like', authMiddleware(), social.likeComment);
+router.post('/songs/:songId/comments', authMiddleware(), socialController.commentSong);
+router.get('/songs/:songId/comments', socialController.getSongComments);
+router.post('/comments/:commentId/reply', authMiddleware(), socialController.replyComment);
+router.post('/comments/:commentId/like', authMiddleware(), socialController.likeComment);
 
-// User Activity
-router.get('/comments/my', authMiddleware(), social.getUserComments);
-router.post('/songs/:songId/share', authMiddleware(), social.shareSong);
-router.get('/activity', authMiddleware(), social.getUserActivity);
+// Likes
+router.post('/songs/:songId/like', authMiddleware(), socialController.likeSong);
+router.post('/albums/:albumId/like', authMiddleware(), socialController.likeAlbum);
+router.get('/likes', authMiddleware(), socialController.checkLikes);
+router.get('/likes/songs', authMiddleware(), socialController.getLikedSongs);
 
-// ===== GROUP LISTENING (Real-time) =====
-router.post('/groups', authMiddleware(), group.createGroup);
-router.get('/groups/public', group.getPublicGroups);
-router.get('/groups/my', authMiddleware(), group.getUserGroups);
-router.get('/groups/:groupId', authMiddleware(), group.getGroupDetails);
-router.post('/groups/:groupId/join', authMiddleware(), group.joinGroup);
-router.post('/groups/:groupId/leave', authMiddleware(), group.leaveGroup);
-router.put('/groups/:groupId/settings', authMiddleware(), group.updateGroupSettings);
-router.delete('/groups/:groupId', authMiddleware(), group.deleteGroup);
-router.post('/groups/:groupId/queue', authMiddleware(), group.addSongToQueue);
-router.delete('/groups/:groupId/queue/:songIndex', authMiddleware(), group.removeSongFromQueue);
-router.get('/groups/:groupId/queue', authMiddleware(), group.getGroupQueue);
+// Follow
+router.post('/users/:userId/follow', authMiddleware(), socialController.followUser);
+router.post('/artists/:artistId/follow', authMiddleware(), socialController.followArtist);
+router.get('/follows/artists', authMiddleware(), socialController.getFollowedArtists);
+
+// Share
+router.post('/songs/:songId/share', authMiddleware(), socialController.shareSong);
+
+// Notifications
+router.get('/notifications', authMiddleware(), socialController.getNotifications);
+// Route cụ thể phải đứng trước route có parameter
+router.put('/notifications/read-all', authMiddleware(), socialController.markAllNotificationsAsRead);
+router.get('/notifications/unread-count', authMiddleware(), socialController.getUnreadCount);
+// Route có parameter đặt sau
+router.put('/notifications/:notificationId/read', authMiddleware(), socialController.markNotificationAsRead);
+
+// ===== PLAYLISTS =====
+router.post('/playlists', authMiddleware(), playlistController.createPlaylist);
+router.get('/playlists', authMiddleware(), playlistController.getMyPlaylists);
+// Route cụ thể phải đứng trước route có parameter
+router.get('/playlists/public', playlistController.getPublicPlaylists);
+router.get('/playlists/followed', authMiddleware(), playlistController.getFollowedPlaylists);
+// Route có parameter đặt sau
+router.get('/playlists/:playlistId', playlistController.getPlaylist);
+router.put('/playlists/:playlistId', authMiddleware(), playlistController.updatePlaylist);
+router.delete('/playlists/:playlistId', authMiddleware(), playlistController.deletePlaylist);
+router.post('/playlists/:playlistId/songs', authMiddleware(), playlistController.addSong);
+router.delete('/playlists/:playlistId/songs/:songId', authMiddleware(), playlistController.removeSong);
+router.put('/playlists/:playlistId/reorder', authMiddleware(), playlistController.reorderSongs);
+router.post('/playlists/:playlistId/like', authMiddleware(), playlistController.likePlaylist);
+router.post('/playlists/:playlistId/follow', authMiddleware(), playlistController.followPlaylist);
 
 module.exports = router;
 

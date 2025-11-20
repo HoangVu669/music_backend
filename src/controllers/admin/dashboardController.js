@@ -1,27 +1,42 @@
+/**
+ * Admin Dashboard Controller
+ */
 const User = require('../../models/User');
+const Song = require('../../models/Song');
 const Playlist = require('../../models/Playlist');
 const Artist = require('../../models/Artist');
+const formatResponse = require('../../utils/formatResponse');
 
-async function getMetrics(req, res, next) {
-  try {
-    const [users, playlists, likesAgg, followsAgg] = await Promise.all([
-      User.countDocuments(),
-      Playlist.countDocuments(),
-      User.aggregate([{ $unwind: '$likedSongs' }, { $count: 'totalLikes' }]),
-      User.aggregate([{ $unwind: '$followedArtists' }, { $count: 'totalFollows' }]),
-    ]);
-    res.json({
-      success: true,
-      data: {
-        totalUsers: users,
-        totalPlaylists: playlists,
-        totalLikes: likesAgg[0]?.totalLikes || 0,
-        totalFollows: followsAgg[0]?.totalFollows || 0,
-      },
-    });
-  } catch (e) { next(e); }
+class AdminDashboardController {
+  async getMetrics(req, res, next) {
+    try {
+      const totalUsers = await User.countDocuments();
+      const totalSongs = await Song.countDocuments();
+      const totalPlaylists = await Playlist.countDocuments();
+      const totalArtists = await Artist.countDocuments();
+
+      const activeUsers = await User.countDocuments({ status: 'ACTIVE' });
+      const newUsersToday = await User.countDocuments({
+        createdAt: { $gte: new Date(new Date().setHours(0, 0, 0, 0)) },
+      });
+
+      res.json(
+        formatResponse.success({
+          metrics: {
+            totalUsers,
+            activeUsers,
+            newUsersToday,
+            totalSongs,
+            totalPlaylists,
+            totalArtists,
+          },
+        })
+      );
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
-module.exports = { getMetrics };
-
+module.exports = new AdminDashboardController();
 

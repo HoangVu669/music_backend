@@ -1,0 +1,285 @@
+/**
+ * Playlist Service - Quản lý playlist cá nhân
+ */
+const Playlist = require('../../models/Playlist');
+const PlaylistInteraction = require('../../models/PlaylistInteraction');
+const Song = require('../../models/Song');
+const { generateUniqueRandomId } = require('../../utils/generateId');
+
+class PlaylistService {
+  /**
+   * Tạo playlist mới
+   */
+  async createPlaylist(userId, data) {
+    const { title, description, isPublic = true, thumbnail = null } = data;
+
+    const playlist = await Playlist.create({
+      playlistId: await generateUniqueRandomId(Playlist, 'playlistId'),
+      title,
+      description,
+      thumbnail,
+      userId,
+      isPublic,
+      songIds: [],
+      songCount: 0,
+      likeCount: 0,
+      followCount: 0,
+      playCount: 0,
+    });
+
+    return playlist;
+  }
+
+  /**
+   * Lấy playlists của user
+   */
+  async getUserPlaylists(userId, isPublic = null) {
+    const query = { userId };
+    if (isPublic !== null) {
+      query.isPublic = isPublic;
+    }
+
+    return Playlist.find(query)
+      .sort({ updatedAt: -1 })
+      .select('playlistId title thumbnail description songCount likeCount followCount playCount isPublic');
+  }
+
+  /**
+   * Lấy playlist theo ID
+   */
+  async getPlaylistById(playlistId, userId = null) {
+    const playlist = await Playlist.findOne({ playlistId });
+    if (!playlist) {
+      throw new Error('Playlist not found');
+    }
+
+    // Kiểm tra quyền truy cập
+    if (!playlist.isPublic && playlist.userId !== userId) {
+      throw new Error('Playlist is private');
+    }
+
+    // Lấy thông tin bài hát
+    const songs = await Song.find({ songId: { $in: playlist.songIds } })
+      .select('songId title artistIds albumId duration thumbnail likeCount listenCount')
+      .limit(100); // Limit 100 bài đầu
+
+    const playlistData = playlist.toObject();
+    playlistData.songs = songs;
+
+    // Kiểm tra user đã like/follow chưa
+    if (userId) {
+      const interaction = await PlaylistInteraction.findOne({ playlistId, userId });
+      playlistData.isLiked = interaction?.isLiked || false;
+      playlistData.isFollowed = interaction?.isFollowed || false;
+    }
+
+    return playlistData;
+  }
+
+  /**
+   * Cập nhật playlist
+   */
+  async updatePlaylist(playlistId, userId, data) {
+    const playlist = await Playlist.findOne({ playlistId });
+    if (!playlist) {
+      throw new Error('Playlist not found');
+    }
+
+    if (playlist.userId !== userId) {
+      throw new Error('Not authorized to update this playlist');
+    }
+
+    const { title, description, thumbnail, isPublic } = data;
+    if (title) playlist.title = title;
+    if (description !== undefined) playlist.description = description;
+    if (thumbnail !== undefined) playlist.thumbnail = thumbnail;
+    if (isPublic !== undefined) playlist.isPublic = isPublic;
+
+    await playlist.save();
+    return playlist;
+  }
+
+  /**
+   * Xóa playlist
+   */
+  async deletePlaylist(playlistId, userId) {
+    const playlist = await Playlist.findOne({ playlistId });
+    if (!playlist) {
+      throw new Error('Playlist not found');
+    }
+
+    if (playlist.userId !== userId) {
+      throw new Error('Not authorized to delete this playlist');
+    }
+
+    await Playlist.deleteOne({ playlistId });
+    return { deleted: true };
+  }
+
+  /**
+   * Thêm bài hát vào playlist
+   */
+  async addSongToPlaylist(playlistId, songId, userId) {
+    const playlist = await Playlist.findOne({ playlistId });
+    if (!playlist) {
+      throw new Error('Playlist not found');
+    }
+
+    // Kiểm tra quyền (chỉ owner mới được thêm)
+    if (playlist.userId !== userId) {
+      throw new Error('Not authorized to modify this playlist');
+    }
+
+    // Kiểm tra bài hát đã có chưa
+    if (playlist.songIds.includes(songId)) {
+      throw new Error('Song already in playlist');
+    }
+
+    // Thêm vào playlist
+    playlist.songIds.push(songId);
+    playlist.songCount = playlist.songIds.length;
+    await playlist.save();
+
+    return playlist;
+  }
+
+  /**
+   * Xóa bài hát khỏi playlist
+   */
+  async removeSongFromPlaylist(playlistId, songId, userId) {
+    const playlist = await Playlist.findOne({ playlistId });
+    if (!playlist) {
+      throw new Error('Playlist not found');
+    }
+
+    if (playlist.userId !== userId) {
+      throw new Error('Not authorized to modify this playlist');
+    }
+
+    playlist.songIds = playlist.songIds.filter(id => id !== songId);
+    playlist.songCount = playlist.songIds.length;
+    await playlist.save();
+
+    return playlist;
+  }
+
+  /**
+   * Sắp xếp lại thứ tự bài hát trong playlist
+   */
+  async reorderPlaylistSongs(playlistId, userId, songIds) {
+    const playlist = await Playlist.findOne({ playlistId });
+    if (!playlist) {
+      throw new Error('Playlist not found');
+    }
+
+    if (playlist.userId !== userId) {
+      throw new Error('Not authorized to modify this playlist');
+    }
+
+    // Validate: tất cả songIds phải có trong playlist
+    const isValid = songIds.every(id => playlist.songIds.includes(id));
+    if (!isValid || songIds.length !== playlist.songIds.length) {
+      throw new Error('Invalid song order');
+    }
+
+    playlist.songIds = songIds;
+    await playlist.save();
+
+    return playlist;
+  }
+
+  /**
+   * Like/Unlike playlist
+   */
+  async likePlaylist(playlistId, userId) {
+    let interaction = await PlaylistInteraction.findOne({ playlistId, userId });
+
+    if (interaction?.isLiked) {
+      // Unlike
+      interaction.isLiked = false;
+      interaction.likedAt = null;
+      await interaction.save();
+      await Playlist.updateOne({ playlistId }, { $inc: { likeCount: -1 } });
+      return { liked: false };
+    } else {
+      // Like
+      if (!interaction) {
+        interaction = await PlaylistInteraction.create({ playlistId, userId });
+      }
+      interaction.isLiked = true;
+      interaction.likedAt = new Date();
+      await interaction.save();
+      await Playlist.updateOne({ playlistId }, { $inc: { likeCount: 1 } });
+      return { liked: true };
+    }
+  }
+
+  /**
+   * Follow/Unfollow playlist
+   */
+  async followPlaylist(playlistId, userId) {
+    let interaction = await PlaylistInteraction.findOne({ playlistId, userId });
+
+    if (interaction?.isFollowed) {
+      // Unfollow
+      interaction.isFollowed = false;
+      interaction.followedAt = null;
+      await interaction.save();
+      await Playlist.updateOne({ playlistId }, { $inc: { followCount: -1 } });
+      return { followed: false };
+    } else {
+      // Follow
+      if (!interaction) {
+        interaction = await PlaylistInteraction.create({ playlistId, userId });
+      }
+      interaction.isFollowed = true;
+      interaction.followedAt = new Date();
+      await interaction.save();
+      await Playlist.updateOne({ playlistId }, { $inc: { followCount: 1 } });
+      return { followed: true };
+    }
+  }
+
+  /**
+   * Lấy playlists công khai
+   */
+  async getPublicPlaylists(limit = 20, sortBy = 'playCount') {
+    const sortOptions = {
+      playCount: { playCount: -1 },
+      likeCount: { likeCount: -1 },
+      followCount: { followCount: -1 },
+      createdAt: { createdAt: -1 },
+    };
+
+    return Playlist.find({ isPublic: true })
+      .sort(sortOptions[sortBy] || sortOptions.playCount)
+      .limit(limit)
+      .select('playlistId title thumbnail description userId songCount likeCount followCount playCount');
+  }
+
+  /**
+   * Lấy playlists đã follow
+   */
+  async getFollowedPlaylists(userId, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    
+    const interactions = await PlaylistInteraction.find({ userId, isFollowed: true })
+      .sort({ followedAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const playlistIds = interactions.map(i => i.playlistId);
+    return Playlist.find({ playlistId: { $in: playlistIds } })
+      .select('playlistId title thumbnail description userId songCount likeCount followCount playCount');
+  }
+
+  /**
+   * Tăng playCount khi user play playlist
+   */
+  async incrementPlayCount(playlistId) {
+    await Playlist.updateOne({ playlistId }, { $inc: { playCount: 1 } });
+  }
+}
+
+module.exports = new PlaylistService();
+
