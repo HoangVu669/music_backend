@@ -9,42 +9,51 @@ const { mapSongToModel } = require('../../schedule/utils/dataMapper');
 
 class SongService {
   /**
-   * Lấy thông tin bài hát từ ZingMp3 trực tiếp
-   * Chỉ lưu vào MongoDB khi user tương tác (play, like) - để dùng cho AI
+   * Lấy thông tin bài hát từ ZingMp3 và tự động lưu vào DB
+   * Lưu vào DB ngay khi lấy thông tin để có thể dùng cho playlist, like, follow
    */
   async getSongInfo(songId) {
-    // Kiểm tra trong DB trước (có thể đã có từ lần user tương tác trước)
-    const song = await Song.findOne({ songId });
+    // Kiểm tra trong DB trước
+    let song = await Song.findOne({ songId });
     
-    if (song) {
-      // Nếu có trong DB → trả về, nhưng vẫn lấy fresh data từ ZingMp3 để đảm bảo cập nhật
-      try {
-        const freshData = await zingmp3Service.getSongInfo(songId);
-        return freshData; // Trả về data mới nhất từ ZingMp3
-      } catch (error) {
-        // Nếu ZingMp3 lỗi nhưng có trong DB → trả về data từ DB
+    // Lấy fresh data từ ZingMp3
+    let songInfo;
+    try {
+      songInfo = await zingmp3Service.getSongInfo(songId);
+    } catch (error) {
+      // Nếu ZingMp3 lỗi nhưng có trong DB → trả về data từ DB
+      if (song) {
         return song;
       }
-    }
-    
-    // Nếu chưa có trong DB → Fetch từ ZingMp3 (không lưu vào DB ngay)
-    try {
-      const songInfo = await zingmp3Service.getSongInfo(songId);
-      return songInfo; // Trả về trực tiếp từ ZingMp3
-    } catch (error) {
       // Check if it's a "not found" error from ZingMp3
       if (error.message && (error.message.includes('Không tìm thấy') || error.message.includes('not found'))) {
         throw new Error(`Song not found: Song ID "${songId}" does not exist in ZingMp3`);
       }
       throw new Error(`Song not found: ${error.message}`);
     }
+    
+    // Tự động lưu vào DB (nếu chưa có hoặc cần cập nhật)
+    if (!song) {
+      // Chưa có trong DB → Lưu mới
+      try {
+        song = await this.saveSongToDB(songId, songInfo);
+      } catch (error) {
+        // Log lỗi nhưng vẫn trả về data từ ZingMp3
+        console.error(`Failed to save song ${songId} to DB:`, error.message);
+      }
+    }
+    
+    // Trả về data mới nhất từ ZingMp3
+    return songInfo;
   }
 
   /**
-   * Lưu bài hát vào MongoDB (chỉ khi user tương tác - cho AI)
+   * Lưu bài hát vào MongoDB
+   * Chỉ lưu những trường có trong Song model
    */
   async saveSongToDB(songId, songInfo = null) {
     try {
+      // Kiểm tra xem đã có trong DB chưa
       const existing = await Song.findOne({ songId });
       if (existing) {
         return existing;
@@ -55,51 +64,36 @@ class SongService {
         songInfo = await zingmp3Service.getSongInfo(songId);
       }
 
-      // Lưu metadata vào DB (không lưu streamingUrl)
+      // Map dữ liệu từ ZingMp3 sang Song model (chỉ những trường có trong Song.js)
+      // mapSongToModel đã không map streamingUrl và streamingUrlExpiry
       const songData = mapSongToModel(songInfo, null);
-      songData.streamingUrl = null;
-      songData.streamingUrlExpiry = null;
 
+      // Lưu vào DB
       const song = await Song.create(songData);
       console.log(`✓ Saved song ${songId} to DB: ${song.title} - ${song.artistsNames}`);
       return song;
     } catch (error) {
+      // Nếu lỗi duplicate (đã có trong DB) → trả về song hiện có
+      if (error.code === 11000 || error.message.includes('duplicate')) {
+        const existing = await Song.findOne({ songId });
+        if (existing) {
+          return existing;
+        }
+      }
       // Log error và throw để caller biết có lỗi
       console.error(`✗ Failed to save song ${songId} to DB:`, error.message);
-      throw error; // Throw để caller handle
+      throw error;
     }
   }
 
   /**
-   * Lấy streaming URL (call trực tiếp ZingMp3, có thể cache)
-   * Chỉ cache vào DB nếu song đã có trong DB (từ user tương tác)
+   * Lấy streaming URL (call trực tiếp ZingMp3, không cache vào DB)
+   * Streaming URL không được lưu vào DB, luôn lấy fresh từ ZingMp3
    */
   async getStreamingUrl(songId, cache = true) {
-    let song = await Song.findOne({ songId });
-
-    // Nếu có cache trong DB và chưa expire → Dùng cache
-    if (cache && song?.streamingUrl && song?.streamingUrlExpiry) {
-      const now = new Date();
-      const expiryTime = new Date(song.streamingUrlExpiry);
-      
-      // Nếu còn hơn 1 giờ nữa mới expire → Dùng cache
-      if (expiryTime > new Date(now.getTime() + 60 * 60 * 1000)) {
-        return song.streamingUrl;
-      }
-    }
-
-    // Call ZingMp3 API để lấy URL mới (luôn fresh)
+    // Call ZingMp3 API để lấy URL mới (luôn fresh, không cache vào DB)
     try {
       const streamingUrl = await zingmp3Service.getStreamingUrl(songId);
-      
-      // Chỉ cache vào DB nếu song đã có trong DB (từ user tương tác trước)
-      if (song) {
-        song.streamingUrl = streamingUrl;
-        song.streamingUrlExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24h
-        await song.save();
-      }
-      // Nếu chưa có trong DB → không lưu, chỉ trả về URL
-      
       return streamingUrl;
     } catch (error) {
       // Check if it's a "not found" error from ZingMp3
@@ -124,16 +118,41 @@ class SongService {
   }
 
   /**
-   * Tìm kiếm bài hát - Dùng trực tiếp ZingMp3, không lưu vào MongoDB
-   * Chỉ lưu vào MongoDB khi user tương tác (play, like)
+   * Tìm kiếm bài hát - Dùng trực tiếp ZingMp3
+   * Tự động lưu các bài hát tìm được vào DB
    */
   async search(keyword, limit = 20) {
     // Gọi trực tiếp ZingMp3 API
+    // zingmp3Service.search() đã unwrap và trả về data.data (format: { top: {...}, songs: [...], playlists: [...], ... })
     const searchData = await zingmp3Service.search(keyword);
     
-    // Không lưu vào DB ngay - chỉ trả về kết quả từ ZingMp3
-    // MongoDB sẽ được cập nhật khi user play/like bài hát
+    // Tự động lưu các bài hát vào DB (async, không block response)
+    // Dữ liệu từ search có thể không đầy đủ, saveSongToDB sẽ tự động fetch thêm từ getSongInfo nếu cần
     
+    // Lưu bài hát top (nếu có)
+    if (searchData && searchData.top && searchData.top.encodeId) {
+      const topSongId = searchData.top.encodeId || searchData.top.id;
+      if (topSongId) {
+        this.saveSongToDB(topSongId, searchData.top).catch(error => {
+          console.error(`Failed to save top song ${topSongId} from search to DB:`, error.message);
+        });
+      }
+    }
+    
+    // Lưu danh sách bài hát
+    if (searchData && searchData.songs && Array.isArray(searchData.songs)) {
+      searchData.songs.forEach(song => {
+        if (song.encodeId || song.id) {
+          const songId = song.encodeId || song.id;
+          // Lưu vào DB (saveSongToDB sẽ tự động fetch thêm từ getSongInfo nếu thiếu thông tin)
+          this.saveSongToDB(songId, song).catch(error => {
+            console.error(`Failed to save song ${songId} from search to DB:`, error.message);
+          });
+        }
+      });
+    }
+    
+    // Trả về dữ liệu search (format từ ZingMp3: { top: {...}, songs: [...], playlists: [...], ... })
     return searchData;
   }
 
@@ -214,21 +233,18 @@ class SongService {
 
   /**
    * Lấy bài hát theo ID (với streaming URL)
-   * Dùng trực tiếp ZingMp3, chỉ lưu vào MongoDB khi user tương tác
+   * Tự động lưu vào MongoDB khi lấy thông tin
    */
   async getSongWithStream(songId, userId = null, cache = true) {
-    // Lấy metadata trực tiếp từ ZingMp3
+    // Lấy metadata từ ZingMp3 và tự động lưu vào DB
     const songInfo = await this.getSongInfo(songId);
     
     // Lấy streaming URL (có cache)
     const streamingUrl = await this.getStreamingUrl(songId, cache);
     
-    // Nếu có userId → Lưu vào MongoDB và track play history (cho AI)
+    // Nếu có userId → Track play history (cho AI)
     if (userId) {
-      // Lưu song vào DB để dùng cho AI (async, không block response)
-      this.saveSongToDB(songId, songInfo).catch(console.error);
-      
-      // Track play history
+      // Track play history (async, không block response)
       this.trackPlayHistory(userId, songId, { context: 'other' }).catch(console.error);
     }
     

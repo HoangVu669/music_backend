@@ -21,6 +21,7 @@ function isValidStreamingUrl(url) {
 
 /**
  * Map ZingMp3 Song sang MongoDB Song Model
+ * Chỉ map những trường có trong Song model (không có streamingUrl)
  */
 function mapSongToModel(zingSong, streamingUrl = null) {
   // Validate dữ liệu đầu vào
@@ -28,22 +29,15 @@ function mapSongToModel(zingSong, streamingUrl = null) {
     throw new Error('Invalid song data: missing encodeId');
   }
 
-  // Validate streamingUrl - chỉ chấp nhận http/https links
-  let validStreamingUrl = null;
-  if (isValidStreamingUrl(streamingUrl)) {
-    validStreamingUrl = streamingUrl;
-  }
-
+  // Chỉ map những trường có trong Song model
   return {
     songId: zingSong.encodeId || zingSong.id,
     title: zingSong.title || '',
     artistIds: (zingSong.artists || []).map(artist => artist.id || artist.encodeId).filter(Boolean),
-    artistsNames: zingSong.artistsNames || (zingSong.artists || []).map(artist => artist.name).filter(Boolean).join(', ') || 'Unknown Artist', // Thêm tên nghệ sĩ
+    artistsNames: zingSong.artistsNames || (zingSong.artists || []).map(artist => artist.name).filter(Boolean).join(', ') || 'Unknown Artist',
     albumId: zingSong.album?.encodeId || zingSong.albumId || null,
     duration: zingSong.duration || 0,
     thumbnail: zingSong.thumbnail || zingSong.thumbnailM || null,
-    streamingUrl: validStreamingUrl, // Chỉ lưu URL hợp lệ
-    streamingUrlExpiry: validStreamingUrl ? new Date(Date.now() + 24 * 60 * 60 * 1000) : null, // Expire sau 24h
     lyric: null, // Sẽ được lấy riêng
     hasLyric: zingSong.hasLyric || false,
     genres: (zingSong.genreIds || []).filter(Boolean),

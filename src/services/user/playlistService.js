@@ -5,6 +5,7 @@ const Playlist = require('../../models/Playlist');
 const PlaylistInteraction = require('../../models/PlaylistInteraction');
 const Song = require('../../models/Song');
 const { generateUniqueRandomId } = require('../../utils/generateId');
+const songService = require('./songService');
 
 class PlaylistService {
   /**
@@ -13,12 +14,15 @@ class PlaylistService {
   async createPlaylist(userId, data) {
     const { title, description, isPublic = true, thumbnail = null } = data;
 
+    // Đảm bảo userId là String để match với Playlist.userId (String)
+    const userIdString = String(userId);
+
     const playlist = await Playlist.create({
       playlistId: await generateUniqueRandomId(Playlist, 'playlistId'),
       title,
       description,
       thumbnail,
-      userId,
+      userId: userIdString,
       isPublic,
       songIds: [],
       songCount: 0,
@@ -34,7 +38,8 @@ class PlaylistService {
    * Lấy playlists của user
    */
   async getUserPlaylists(userId, isPublic = null) {
-    const query = { userId };
+    // Convert userId sang String để match với Playlist.userId (String)
+    const query = { userId: String(userId) };
     if (isPublic !== null) {
       query.isPublic = isPublic;
     }
@@ -54,7 +59,7 @@ class PlaylistService {
     }
 
     // Kiểm tra quyền truy cập
-    if (!playlist.isPublic && playlist.userId !== userId) {
+    if (!playlist.isPublic && userId && String(playlist.userId) !== String(userId)) {
       throw new Error('Playlist is private');
     }
 
@@ -68,7 +73,10 @@ class PlaylistService {
 
     // Kiểm tra user đã like/follow chưa
     if (userId) {
-      const interaction = await PlaylistInteraction.findOne({ playlistId, userId });
+      const interaction = await PlaylistInteraction.findOne({ 
+        playlistId, 
+        userId: String(userId) 
+      });
       playlistData.isLiked = interaction?.isLiked || false;
       playlistData.isFollowed = interaction?.isFollowed || false;
     }
@@ -85,7 +93,8 @@ class PlaylistService {
       throw new Error('Playlist not found');
     }
 
-    if (playlist.userId !== userId) {
+    // Convert cả hai về String để so sánh
+    if (String(playlist.userId) !== String(userId)) {
       throw new Error('Not authorized to update this playlist');
     }
 
@@ -108,7 +117,8 @@ class PlaylistService {
       throw new Error('Playlist not found');
     }
 
-    if (playlist.userId !== userId) {
+    // Convert cả hai về String để so sánh
+    if (String(playlist.userId) !== String(userId)) {
       throw new Error('Not authorized to delete this playlist');
     }
 
@@ -118,6 +128,7 @@ class PlaylistService {
 
   /**
    * Thêm bài hát vào playlist
+   * Tự động lưu song vào DB nếu chưa có
    */
   async addSongToPlaylist(playlistId, songId, userId) {
     const playlist = await Playlist.findOne({ playlistId });
@@ -126,13 +137,29 @@ class PlaylistService {
     }
 
     // Kiểm tra quyền (chỉ owner mới được thêm)
-    if (playlist.userId !== userId) {
+    // Convert cả hai về String để so sánh (vì User.id là Number, Playlist.userId là String)
+    const playlistUserId = String(playlist.userId);
+    const requestUserId = String(userId);
+    
+    if (playlistUserId !== requestUserId) {
       throw new Error('Not authorized to modify this playlist');
     }
 
     // Kiểm tra bài hát đã có chưa
     if (playlist.songIds.includes(songId)) {
       throw new Error('Song already in playlist');
+    }
+
+    // Đảm bảo song đã có trong DB trước khi thêm vào playlist
+    let song = await Song.findOne({ songId });
+    if (!song) {
+      // Tự động lưu song vào DB
+      try {
+        song = await songService.saveSongToDB(songId);
+      } catch (error) {
+        // Nếu không lưu được, vẫn thử thêm vào playlist (songId vẫn hợp lệ)
+        console.error(`Warning: Could not save song ${songId} to DB: ${error.message}`);
+      }
     }
 
     // Thêm vào playlist
@@ -152,7 +179,8 @@ class PlaylistService {
       throw new Error('Playlist not found');
     }
 
-    if (playlist.userId !== userId) {
+    // Convert cả hai về String để so sánh
+    if (String(playlist.userId) !== String(userId)) {
       throw new Error('Not authorized to modify this playlist');
     }
 
@@ -172,7 +200,8 @@ class PlaylistService {
       throw new Error('Playlist not found');
     }
 
-    if (playlist.userId !== userId) {
+    // Convert cả hai về String để so sánh
+    if (String(playlist.userId) !== String(userId)) {
       throw new Error('Not authorized to modify this playlist');
     }
 
@@ -192,7 +221,11 @@ class PlaylistService {
    * Like/Unlike playlist
    */
   async likePlaylist(playlistId, userId) {
-    let interaction = await PlaylistInteraction.findOne({ playlistId, userId });
+    const userIdString = String(userId);
+    let interaction = await PlaylistInteraction.findOne({ 
+      playlistId, 
+      userId: userIdString 
+    });
 
     if (interaction?.isLiked) {
       // Unlike
@@ -204,7 +237,10 @@ class PlaylistService {
     } else {
       // Like
       if (!interaction) {
-        interaction = await PlaylistInteraction.create({ playlistId, userId });
+        interaction = await PlaylistInteraction.create({ 
+          playlistId, 
+          userId: userIdString 
+        });
       }
       interaction.isLiked = true;
       interaction.likedAt = new Date();
@@ -218,7 +254,11 @@ class PlaylistService {
    * Follow/Unfollow playlist
    */
   async followPlaylist(playlistId, userId) {
-    let interaction = await PlaylistInteraction.findOne({ playlistId, userId });
+    const userIdString = String(userId);
+    let interaction = await PlaylistInteraction.findOne({ 
+      playlistId, 
+      userId: userIdString 
+    });
 
     if (interaction?.isFollowed) {
       // Unfollow
@@ -230,7 +270,10 @@ class PlaylistService {
     } else {
       // Follow
       if (!interaction) {
-        interaction = await PlaylistInteraction.create({ playlistId, userId });
+        interaction = await PlaylistInteraction.create({ 
+          playlistId, 
+          userId: userIdString 
+        });
       }
       interaction.isFollowed = true;
       interaction.followedAt = new Date();
@@ -262,8 +305,12 @@ class PlaylistService {
    */
   async getFollowedPlaylists(userId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
+    const userIdString = String(userId);
     
-    const interactions = await PlaylistInteraction.find({ userId, isFollowed: true })
+    const interactions = await PlaylistInteraction.find({ 
+      userId: userIdString, 
+      isFollowed: true 
+    })
       .sort({ followedAt: -1 })
       .skip(skip)
       .limit(limit);

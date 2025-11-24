@@ -34,8 +34,9 @@ class RoomController {
   async getRoom(req, res, next) {
     try {
       const { roomId } = req.params;
+      const userId = req.user?.id || null;
 
-      const room = await roomService.getRoomWithSongs(roomId);
+      const room = await roomService.getRoomWithSongs(roomId, userId);
 
       res.json(formatResponse.success(room));
     } catch (error) {

@@ -1,8 +1,10 @@
 /**
  * Discovery Controller - Artist, Playlist, MV, Suggest
  * Dùng trực tiếp ZingMp3 API cho hiển thị
+ * Tự động lưu bài hát vào DB khi lấy album/playlist/artist songs
  */
 const zingmp3Service = require('../../services/zingmp3Service');
+const songService = require('../../services/user/songService');
 const formatResponse = require('../../utils/formatResponse');
 
 class DiscoveryController {
@@ -28,6 +30,7 @@ class DiscoveryController {
   /**
    * GET /api/v1/user/artists/:artistId/songs
    * Lấy danh sách bài hát của nghệ sĩ
+   * Tự động lưu các bài hát vào DB
    */
   async getArtistSongs(req, res, next) {
     try {
@@ -35,6 +38,17 @@ class DiscoveryController {
       const { page = 1, count = 20 } = req.query;
 
       const data = await zingmp3Service.getArtistSongs(artistId, parseInt(page), parseInt(count));
+      
+      // Tự động lưu các bài hát vào DB (async, không block response)
+      if (data.items && Array.isArray(data.items)) {
+        data.items.forEach(song => {
+          if (song.encodeId || song.id) {
+            const songId = song.encodeId || song.id;
+            songService.saveSongToDB(songId, song).catch(console.error);
+          }
+        });
+      }
+      
       res.json(formatResponse.success(data));
     } catch (error) {
       next(error);
@@ -44,12 +58,24 @@ class DiscoveryController {
   /**
    * GET /api/v1/user/playlists/zing/:playlistId
    * Lấy chi tiết playlist từ ZingMp3
+   * Tự động lưu các bài hát vào DB
    */
   async getZingPlaylist(req, res, next) {
     try {
       const { playlistId } = req.params;
 
       const data = await zingmp3Service.getPlaylistDetail(playlistId);
+      
+      // Tự động lưu các bài hát vào DB (async, không block response)
+      if (data.song && data.song.items && Array.isArray(data.song.items)) {
+        data.song.items.forEach(song => {
+          if (song.encodeId || song.id) {
+            const songId = song.encodeId || song.id;
+            songService.saveSongToDB(songId, song).catch(console.error);
+          }
+        });
+      }
+      
       res.json(formatResponse.success(data));
     } catch (error) {
       next(error);
@@ -125,12 +151,24 @@ class DiscoveryController {
   /**
    * GET /api/v1/user/albums/:albumId
    * Lấy chi tiết album từ ZingMp3
+   * Tự động lưu các bài hát vào DB
    */
   async getAlbum(req, res, next) {
     try {
       const { albumId } = req.params;
 
       const data = await zingmp3Service.getAlbumDetail(albumId);
+      
+      // Tự động lưu các bài hát vào DB (async, không block response)
+      if (data.song && data.song.items && Array.isArray(data.song.items)) {
+        data.song.items.forEach(song => {
+          if (song.encodeId || song.id) {
+            const songId = song.encodeId || song.id;
+            songService.saveSongToDB(songId, song).catch(console.error);
+          }
+        });
+      }
+      
       res.json(formatResponse.success(data));
     } catch (error) {
       next(error);

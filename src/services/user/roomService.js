@@ -19,9 +19,9 @@ class RoomService {
       roomId: await generateUniqueRandomId(Room, 'roomId'),
       name: name || `${ownerName}'s Room`,
       description,
-      ownerId,
+      ownerId: String(ownerId),
       ownerName,
-      members: [{ userId: ownerId, userName: ownerName }],
+      members: [{ userId: String(ownerId), userName: ownerName }],
       memberCount: 1,
       isPrivate,
       maxMembers,
@@ -49,7 +49,7 @@ class RoomService {
     }
 
     // Kiểm tra đã join chưa
-    const existingMember = room.members.find(m => m.userId === userId);
+    const existingMember = room.members.find(m => String(m.userId) === String(userId));
     if (existingMember) {
       return room;
     }
@@ -60,7 +60,7 @@ class RoomService {
     }
 
     // Thêm member
-    room.members.push({ userId, userName });
+    room.members.push({ userId: String(userId), userName });
     room.memberCount += 1;
     await room.save();
 
@@ -141,16 +141,25 @@ class RoomService {
       throw new Error('Room not found');
     }
 
+    // Kiểm tra user đã join room chưa
+    const isMember = room.members.some(m => String(m.userId) === String(addedBy));
+    if (!isMember) {
+      throw new Error('User must join room before adding songs');
+    }
+
     // Kiểm tra bài hát đã có trong queue chưa
     const existing = room.queue.find(q => q.songId === songId);
     if (existing) {
       throw new Error('Song already in queue');
     }
 
+    // Đảm bảo bài hát tồn tại trong DB trước khi thêm vào queue
+    await songService.saveSongToDB(songId);
+
     // Thêm vào queue
     room.queue.push({
       songId,
-      addedBy,
+      addedBy: String(addedBy),
       order: room.queue.length + 1,
     });
     await room.save();
@@ -206,13 +215,26 @@ class RoomService {
   /**
    * Lấy thông tin phòng với streaming URLs
    */
-  async getRoomWithSongs(roomId) {
+  async getRoomWithSongs(roomId, userId = null) {
     const room = await Room.findOne({ roomId, isActive: true });
     if (!room) {
       throw new Error('Room not found');
     }
 
     const roomData = room.toObject();
+    
+    // Kiểm tra user có phải owner không
+    if (userId) {
+      const userIdString = String(userId);
+      roomData.isOwner = room.ownerId && String(room.ownerId) === userIdString;
+      
+      // Kiểm tra user có phải member không
+      const isMember = room.members.some(m => String(m.userId) === userIdString);
+      roomData.isMember = isMember || roomData.isOwner;
+    } else {
+      roomData.isOwner = false;
+      roomData.isMember = false;
+    }
 
     // Lấy streaming URL cho current song
     if (room.currentSongId) {

@@ -139,7 +139,7 @@ class SocialService {
 
   /**
    * Like/Unlike bài hát
-   * Lưu song vào MongoDB nếu chưa có (cho AI)
+   * Tự động lưu song vào MongoDB nếu chưa có
    */
   async likeSong(songId, userId) {
     const existing = await SongLike.findOne({ songId, userId });
@@ -147,23 +147,34 @@ class SocialService {
     if (existing) {
       // Unlike
       await SongLike.deleteOne({ songId, userId });
-      await Song.updateOne({ songId }, { $inc: { likeCount: -1 } });
+      // Đảm bảo likeCount không bị âm
+      await Song.updateOne(
+        { songId, likeCount: { $gt: 0 } },
+        { $inc: { likeCount: -1 } }
+      );
       return { liked: false };
     } else {
       // Like - Đảm bảo song đã có trong MongoDB TRƯỚC KHI like
       let song = await Song.findOne({ songId });
       if (!song) {
-        // Lưu song vào DB khi user like (cho AI) - PHẢI WAIT để đảm bảo có data
+        // Lưu song vào DB khi user like - PHẢI WAIT để đảm bảo có data
         const songService = require('./songService');
-        song = await songService.saveSongToDB(songId);
+        try {
+          song = await songService.saveSongToDB(songId);
+        } catch (error) {
+          // Nếu không lưu được (ZingMP3 API lỗi), throw error
+          throw new Error(`Cannot save song to database: ${error.message}`);
+        }
         
-        // Nếu vẫn không lưu được (ZingMP3 API lỗi), throw error
+        // Nếu vẫn không lưu được, throw error
         if (!song) {
           throw new Error('Cannot save song to database. Please try again.');
         }
       }
       
+      // Tạo like record
       await SongLike.create({ songId, userId, likedAt: new Date() });
+      // Tăng likeCount
       await Song.updateOne({ songId }, { $inc: { likeCount: 1 } });
       return { liked: true };
     }
@@ -214,6 +225,7 @@ class SocialService {
 
   /**
    * Lấy danh sách bài hát đã like
+   * Nếu song không có trong DB, sẽ lấy từ ZingMp3
    */
   async getLikedSongs(userId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
@@ -230,23 +242,49 @@ class SocialService {
     const songsData = await Song.find({ songId: { $in: songIds } })
       .select('songId title artistsNames artistIds thumbnail duration likeCount listenCount');
 
-    // Map với likedAt từ SongLike và sort theo thứ tự likes
-    const songs = likes.map(like => {
-      const song = songsData.find(s => s.songId === like.songId);
-      if (!song) return null;
-      
-      return {
-        songId: song.songId,
-        title: song.title,
-        artistsNames: song.artistsNames || song.artistIds?.join(', ') || 'Unknown Artist',
-        thumbnail: song.thumbnail,
-        duration: song.duration,
-        likedAt: like.likedAt,
-      };
-    }).filter(Boolean); // Remove null entries
+    // Map với likedAt từ SongLike và lấy thông tin từ ZingMp3 nếu không có trong DB
+    const songService = require('./songService');
+    const songs = await Promise.all(
+      likes.map(async (like) => {
+        let song = songsData.find(s => s.songId === like.songId);
+        
+        // Nếu không có trong DB, lấy từ ZingMp3
+        if (!song) {
+          try {
+            const songInfo = await songService.getSongInfo(like.songId);
+            // Map từ ZingMp3 format sang format cần thiết
+            song = {
+              songId: songInfo.encodeId || songInfo.id || like.songId,
+              title: songInfo.title || 'Unknown Title',
+              artistsNames: songInfo.artistsNames || (songInfo.artists || []).map(a => a.name).join(', ') || 'Unknown Artist',
+              thumbnail: songInfo.thumbnail || songInfo.thumbnailM || null,
+              duration: songInfo.duration || 0,
+            };
+          } catch (error) {
+            // Nếu không lấy được từ ZingMp3, skip bài hát này
+            console.error(`Failed to get song info for ${like.songId}:`, error.message);
+            return null;
+          }
+        }
+        
+        return {
+          songId: song.songId,
+          title: song.title,
+          artistsNames: song.artistsNames || song.artistIds?.join(', ') || 'Unknown Artist',
+          thumbnail: song.thumbnail,
+          duration: song.duration,
+          likeCount: song.likeCount || 0,
+          listenCount: song.listenCount || 0,
+          likedAt: like.likedAt,
+        };
+      })
+    );
+
+    // Remove null entries
+    const validSongs = songs.filter(Boolean);
 
     return {
-      songs,
+      songs: validSongs,
       page,
       limit,
       total,

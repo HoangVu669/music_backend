@@ -25,12 +25,6 @@ const SongSchema = new mongoose.Schema(
     },
     thumbnail: { type: String },
 
-    streamingUrl: {
-      type: String,
-      required: false, // Not required - will be fetched on demand
-      index: true,
-    },
-    streamingUrlExpiry: { type: Date },
 
     lyric: { type: String },
     hasLyric: {

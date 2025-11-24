@@ -63,7 +63,7 @@ router.post('/rooms', authMiddleware(), roomController.createRoom);
 router.get('/rooms/public', roomController.getPublicRooms);
 router.get('/rooms/my-rooms', authMiddleware(), roomController.getMyRooms);
 // Route có parameter đặt sau
-router.get('/rooms/:roomId', roomController.getRoom);
+router.get('/rooms/:roomId', authMiddleware(), roomController.getRoom);
 router.post('/rooms/:roomId/join', authMiddleware(), roomController.joinRoom);
 router.post('/rooms/:roomId/leave', authMiddleware(), roomController.leaveRoom);
 router.put('/rooms/:roomId/playback', authMiddleware(), roomController.updatePlayback);
