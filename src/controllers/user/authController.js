@@ -13,7 +13,7 @@ class AuthController {
    * Body: { username, email, password, fullname? }
    * Response: { success: true, message: "success", data: { user, token } }
    */
-  async register(req, res, next) {  
+  async register(req, res, next) {
     try {
       const { username, email, password, fullname } = req.body;
 
@@ -110,13 +110,17 @@ class AuthController {
         );
       }
 
-      // Find user by username or email
+      // Find user by username or email - tối ưu query với select chỉ fields cần thiết
+      const trimmedUsername = username.trim();
+      const lowerEmail = trimmedUsername.toLowerCase();
+
+      // Select chỉ các fields cần thiết để giảm data transfer và tăng tốc độ
       const user = await User.findOne({
         $or: [
-          { username: username.trim() },
-          { email: username.toLowerCase().trim() }
+          { username: trimmedUsername },
+          { email: lowerEmail }
         ],
-      });
+      }).select('id username email password fullname avatar status');
 
       if (!user) {
         return res.status(401).json(
@@ -124,7 +128,7 @@ class AuthController {
         );
       }
 
-      // Check password
+      // Check password - tối ưu bằng cách verify trước khi check status
       const isPasswordMatch = await user.matchPassword(password);
       if (!isPasswordMatch) {
         return res.status(401).json(

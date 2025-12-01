@@ -40,8 +40,13 @@ async function connectDatabase() {
   connectionPromise = (async () => {
     try {
       const conn = await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 5000, // 5 giây - cân bằng giữa tốc độ và độ tin cậy
+        serverSelectionTimeoutMS: 1500, // Giảm xuống 1.5 giây để fail fast
+        socketTimeoutMS: 20000, // 20 giây cho socket operations
+        connectTimeoutMS: 1500, // 1.5 giây để connect
         maxPoolSize: 10, // Pool size cho Vercel serverless
+        minPoolSize: 1, // Giữ ít nhất 1 connection (sẵn sàng ngay)
+        maxIdleTimeMS: 30000, // Giữ connection 30s khi idle
+        heartbeatFrequencyMS: 10000, // Check connection health mỗi 10s
       });
       console.log(`MongoDB Connected: ${conn.connection.host}`);
       connectionPromise = null; // Reset sau khi connect thành công

@@ -142,12 +142,14 @@ async function startServer() {
   }
 }
 
-// For Vercel: export app and connect DB on cold start
+// For Vercel: export app and pre-connect DB để giảm cold start time
 // For local: start server normally
 if (process.env.VERCEL) {
-  // Vercel serverless: connect DB and export app
-  // Note: DB connection sẽ được thực hiện khi function được invoke lần đầu
-  // Không connect ngay ở đây vì có thể gây timeout
+  // Vercel serverless: pre-connect DB ngay khi module load để giảm latency
+  // Connection sẽ được cache và reuse trong cùng instance
+  connectDatabase().catch((err) => {
+    console.error('Pre-connection failed, will retry on first request:', err.message);
+  });
   module.exports = app;
 } else {
   // Local development: start server
