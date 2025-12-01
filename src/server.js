@@ -25,27 +25,7 @@ app.use(cookieParser());
 app.use(morgan('dev'));
 app.use(loggerMiddleware);
 
-// Database middleware - đảm bảo DB được kết nối trước mỗi request (tối ưu cho Vercel)
-// Bỏ qua health check vì nó tự xử lý DB connection
-app.use(async (req, res, next) => {
-  if (req.path === '/health') {
-    return next();
-  }
-  // Nếu chưa connected, kết nối trước khi xử lý request
-  if (!isDatabaseConnected()) {
-    try {
-      await connectDatabase();
-    } catch (error) {
-      console.error('Database connection failed in middleware:', error.message);
-      return res.status(503).json({
-        success: false,
-        message: 'Database connection failed. Please try again.',
-        error: process.env.NODE_ENV === 'production' ? undefined : error.message,
-      });
-    }
-  }
-  next();
-});
+// Database sẽ tự động kết nối khi cần thiết, không cần middleware
 
 app.get('/health', async (req, res) => {
   let dbStatus = 'disconnected';
@@ -142,14 +122,10 @@ async function startServer() {
   }
 }
 
-// For Vercel: export app and pre-connect DB để giảm cold start time
+// For Vercel: export app and connect DB on cold start
 // For local: start server normally
 if (process.env.VERCEL) {
-  // Vercel serverless: pre-connect DB ngay khi module load để giảm latency
-  // Connection sẽ được cache và reuse trong cùng instance
-  connectDatabase().catch((err) => {
-    console.error('Pre-connection failed, will retry on first request:', err.message);
-  });
+  // Vercel serverless: export app, connection sẽ được thực hiện khi cần
   module.exports = app;
 } else {
   // Local development: start server
