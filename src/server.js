@@ -1,4 +1,3 @@
-// Music Backend Server - Vercel Deployment
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
