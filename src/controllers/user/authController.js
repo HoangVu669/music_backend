@@ -47,10 +47,11 @@ class AuthController {
         );
       }
 
-      // Check if user already exists
+      // Check if user already exists - tối ưu query với select chỉ id
+      const lowerEmail = email.toLowerCase();
       const existingUser = await User.findOne({
-        $or: [{ username }, { email: email.toLowerCase() }],
-      });
+        $or: [{ username }, { email: lowerEmail }],
+      }).select('_id username email').lean();
 
       if (existingUser) {
         const field = existingUser.username === username ? 'Username' : 'Email';
@@ -110,17 +111,17 @@ class AuthController {
         );
       }
 
-      // Find user by username or email - tối ưu query với select chỉ fields cần thiết
+      // Find user by username or email - tối ưu query
       const trimmedUsername = username.trim();
       const lowerEmail = trimmedUsername.toLowerCase();
 
-      // Select chỉ các fields cần thiết để giảm data transfer và tăng tốc độ
-      const user = await User.findOne({
-        $or: [
-          { username: trimmedUsername },
-          { email: lowerEmail }
-        ],
-      }).select('id username email password fullname avatar status');
+      // Select chỉ fields cần thiết, thử username trước (thường nhanh hơn)
+      let user = await User.findOne({ username: trimmedUsername })
+        .select('id username email password fullname avatar status');
+      if (!user) {
+        user = await User.findOne({ email: lowerEmail })
+          .select('id username email password fullname avatar status');
+      }
 
       if (!user) {
         return res.status(401).json(
@@ -183,7 +184,10 @@ class AuthController {
     try {
       const userId = req.user.id;
 
-      const user = await User.findOne({ id: userId });
+      // Select chỉ fields cần thiết
+      const user = await User.findOne({ id: userId })
+        .select('id username email fullname avatar bio dateOfBirth gender phone status createdAt')
+        .lean();
       if (!user) {
         return res.status(404).json(
           formatResponse.failure('User not found', 404)
@@ -191,21 +195,7 @@ class AuthController {
       }
 
       res.json(
-        formatResponse.success({
-          user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            fullname: user.fullname,
-            avatar: user.avatar,
-            bio: user.bio,
-            dateOfBirth: user.dateOfBirth,
-            gender: user.gender,
-            phone: user.phone,
-            status: user.status,
-            createdAt: user.createdAt,
-          },
-        })
+        formatResponse.success({ user })
       );
     } catch (error) {
       next(error);
@@ -221,7 +211,9 @@ class AuthController {
       const userId = req.user.id;
       const { fullname, avatar, bio, dateOfBirth, gender, phone } = req.body;
 
-      const user = await User.findOne({ id: userId });
+      // Select chỉ fields cần thiết để update
+      const user = await User.findOne({ id: userId })
+        .select('id username email fullname avatar bio dateOfBirth gender phone');
       if (!user) {
         return res.status(404).json(
           formatResponse.failure('User not found', 404)

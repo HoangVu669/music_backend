@@ -20,12 +20,33 @@ const app = express();
 const server = http.createServer(app);
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Giới hạn body size
 app.use(cookieParser());
-app.use(morgan('dev'));
+
+// Tắt morgan trong production để tăng tốc độ
+if (process.env.NODE_ENV !== 'production') {
+  app.use(morgan('dev'));
+}
 app.use(loggerMiddleware);
 
-// Database sẽ tự động kết nối khi cần thiết, không cần middleware
+// Database middleware - đảm bảo DB connected trước mỗi request (tối ưu cho Vercel)
+app.use(async (req, res, next) => {
+  if (req.path === '/health') {
+    return next();
+  }
+  // Chỉ connect nếu chưa connected
+  if (!isDatabaseConnected()) {
+    try {
+      await connectDatabase();
+    } catch (error) {
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection failed',
+      });
+    }
+  }
+  next();
+});
 
 app.get('/health', async (req, res) => {
   let dbStatus = 'disconnected';
@@ -122,10 +143,13 @@ async function startServer() {
   }
 }
 
-// For Vercel: export app and connect DB on cold start
+// For Vercel: export app and pre-connect DB để giảm cold start
 // For local: start server normally
 if (process.env.VERCEL) {
-  // Vercel serverless: export app, connection sẽ được thực hiện khi cần
+  // Pre-connect DB ngay khi module load (không block)
+  connectDatabase().catch(() => {
+    // Ignore error, sẽ retry khi có request
+  });
   module.exports = app;
 } else {
   // Local development: start server

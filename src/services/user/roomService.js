@@ -43,7 +43,8 @@ class RoomService {
    * Join phòng
    */
   async joinRoom(roomId, userId, userName) {
-    const room = await Room.findOne({ roomId, isActive: true });
+    const room = await Room.findOne({ roomId, isActive: true })
+      .select('roomId name ownerId members memberCount maxMembers isPrivate');
     if (!room) {
       throw new Error('Room not found');
     }
@@ -79,7 +80,8 @@ class RoomService {
    * Leave phòng
    */
   async leaveRoom(roomId, userId) {
-    const room = await Room.findOne({ roomId, isActive: true });
+    const room = await Room.findOne({ roomId, isActive: true })
+      .select('roomId members memberCount');
     if (!room) {
       throw new Error('Room not found');
     }
@@ -107,7 +109,8 @@ class RoomService {
   async updatePlaybackState(roomId, data) {
     const { currentSongId, currentPosition, isPlaying } = data;
 
-    const room = await Room.findOne({ roomId, isActive: true });
+    const room = await Room.findOne({ roomId, isActive: true })
+      .select('roomId ownerId ownerName currentSongId currentPosition isPlaying lastSyncAt');
     if (!room) {
       throw new Error('Room not found');
     }
@@ -136,7 +139,8 @@ class RoomService {
    * Thêm bài hát vào queue
    */
   async addSongToQueue(roomId, songId, addedBy) {
-    const room = await Room.findOne({ roomId, isActive: true });
+    const room = await Room.findOne({ roomId, isActive: true })
+      .select('roomId members queue ownerId');
     if (!room) {
       throw new Error('Room not found');
     }
@@ -181,7 +185,8 @@ class RoomService {
    * Xóa bài hát khỏi queue
    */
   async removeSongFromQueue(roomId, songId, userId) {
-    const room = await Room.findOne({ roomId, isActive: true });
+    const room = await Room.findOne({ roomId, isActive: true })
+      .select('roomId ownerId queue members');
     if (!room) {
       throw new Error('Room not found');
     }
@@ -216,18 +221,20 @@ class RoomService {
    * Lấy thông tin phòng với streaming URLs
    */
   async getRoomWithSongs(roomId, userId = null) {
-    const room = await Room.findOne({ roomId, isActive: true });
+    const room = await Room.findOne({ roomId, isActive: true })
+      .select('roomId name description ownerId ownerName members memberCount currentSongId queue isPrivate')
+      .lean();
     if (!room) {
       throw new Error('Room not found');
     }
 
-    const roomData = room.toObject();
-    
+    const roomData = { ...room };
+
     // Kiểm tra user có phải owner không
     if (userId) {
       const userIdString = String(userId);
       roomData.isOwner = room.ownerId && String(room.ownerId) === userIdString;
-      
+
       // Kiểm tra user có phải member không
       const isMember = room.members.some(m => String(m.userId) === userIdString);
       roomData.isMember = isMember || roomData.isOwner;
@@ -269,7 +276,8 @@ class RoomService {
     return Room.find({ isPrivate: false, isActive: true })
       .sort({ memberCount: -1, createdAt: -1 })
       .limit(limit)
-      .select('roomId name description ownerName memberCount currentSongId isPlaying');
+      .select('roomId name description ownerName memberCount currentSongId isPlaying')
+      .lean(); // Dùng lean() để tăng tốc độ
   }
 
   /**
@@ -284,7 +292,8 @@ class RoomService {
       isActive: true,
     })
       .sort({ updatedAt: -1 })
-      .select('roomId name description ownerName memberCount currentSongId isPlaying');
+      .select('roomId name description ownerName memberCount currentSongId isPlaying')
+      .lean(); // Dùng lean() để tăng tốc độ
   }
 }
 

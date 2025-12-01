@@ -21,7 +21,7 @@ class AdminAuthController {
         );
       }
 
-      const admin = await Admin.findOne({ username });
+      const admin = await Admin.findOne({ username }).select('adminId username passwordHash isActive role');
       if (!admin) {
         return res.status(401).json(
           formatResponse.failure('Invalid credentials', 401)

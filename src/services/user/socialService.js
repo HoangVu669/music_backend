@@ -103,7 +103,7 @@ class SocialService {
    */
   async getSongComments(songId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    
+
     const comments = await SongComment.find({
       songId,
       isDeleted: false,
@@ -111,24 +111,35 @@ class SocialService {
     })
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean(); // Dùng lean() để tăng tốc độ
 
-    // Lấy replies cho mỗi comment
-    const commentsWithReplies = await Promise.all(
-      comments.map(async (comment) => {
-        const replies = await CommentReply.find({
-          commentId: comment.commentId,
-          isDeleted: false,
-        })
-          .sort({ createdAt: 1 })
-          .limit(5); // Limit 5 replies mới nhất
+    // Lấy replies cho mỗi comment - tối ưu với Promise.all và lean
+    const commentIds = comments.map(c => c.commentId);
+    const allReplies = await CommentReply.find({
+      commentId: { $in: commentIds },
+      isDeleted: false,
+    })
+      .sort({ createdAt: 1 })
+      .limit(50) // Limit tổng số replies
+      .lean();
 
-        return {
-          ...comment.toObject(),
-          replies,
-        };
-      })
-    );
+    // Group replies by commentId
+    const repliesByComment = {};
+    allReplies.forEach(reply => {
+      if (!repliesByComment[reply.commentId]) {
+        repliesByComment[reply.commentId] = [];
+      }
+      if (repliesByComment[reply.commentId].length < 5) {
+        repliesByComment[reply.commentId].push(reply);
+      }
+    });
+
+    // Map comments với replies
+    const commentsWithReplies = comments.map(comment => ({
+      ...comment,
+      replies: repliesByComment[comment.commentId] || [],
+    }));
 
     return commentsWithReplies;
   }
@@ -142,7 +153,7 @@ class SocialService {
    * Tự động lưu song vào MongoDB nếu chưa có
    */
   async likeSong(songId, userId) {
-    const existing = await SongLike.findOne({ songId, userId });
+    const existing = await SongLike.findOne({ songId, userId }).select('_id').lean();
 
     if (existing) {
       // Unlike
@@ -165,13 +176,13 @@ class SocialService {
           // Nếu không lưu được (ZingMP3 API lỗi), throw error
           throw new Error(`Cannot save song to database: ${error.message}`);
         }
-        
+
         // Nếu vẫn không lưu được, throw error
         if (!song) {
           throw new Error('Cannot save song to database. Please try again.');
         }
       }
-      
+
       // Tạo like record
       await SongLike.create({ songId, userId, likedAt: new Date() });
       // Tăng likeCount
@@ -184,7 +195,7 @@ class SocialService {
    * Like/Unlike album
    */
   async likeAlbum(albumId, userId) {
-    const existing = await AlbumLike.findOne({ albumId, userId });
+    const existing = await AlbumLike.findOne({ albumId, userId }).select('_id').lean();
 
     if (existing) {
       await AlbumLike.deleteOne({ albumId, userId });
@@ -207,14 +218,18 @@ class SocialService {
     };
 
     if (songIds.length > 0) {
-      const songLikes = await SongLike.find({ userId, songId: { $in: songIds } });
+      const songLikes = await SongLike.find({ userId, songId: { $in: songIds } })
+        .select('songId')
+        .lean();
       songLikes.forEach(like => {
         result.songs[like.songId] = true;
       });
     }
 
     if (albumIds.length > 0) {
-      const albumLikes = await AlbumLike.find({ userId, albumId: { $in: albumIds } });
+      const albumLikes = await AlbumLike.find({ userId, albumId: { $in: albumIds } })
+        .select('albumId')
+        .lean();
       albumLikes.forEach(like => {
         result.albums[like.albumId] = true;
       });
@@ -229,25 +244,28 @@ class SocialService {
    */
   async getLikedSongs(userId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    
+
     // Get total count
     const total = await SongLike.countDocuments({ userId });
-    
+
     const likes = await SongLike.find({ userId })
       .sort({ likedAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .select('songId likedAt')
+      .lean(); // Dùng lean() để tăng tốc độ
 
     const songIds = likes.map(l => l.songId);
     const songsData = await Song.find({ songId: { $in: songIds } })
-      .select('songId title artistsNames artistIds thumbnail duration likeCount listenCount');
+      .select('songId title artistsNames artistIds thumbnail duration likeCount listenCount')
+      .lean(); // Dùng lean() để tăng tốc độ
 
     // Map với likedAt từ SongLike và lấy thông tin từ ZingMp3 nếu không có trong DB
     const songService = require('./songService');
     const songs = await Promise.all(
       likes.map(async (like) => {
         let song = songsData.find(s => s.songId === like.songId);
-        
+
         // Nếu không có trong DB, lấy từ ZingMp3
         if (!song) {
           try {
@@ -266,7 +284,7 @@ class SocialService {
             return null;
           }
         }
-        
+
         return {
           songId: song.songId,
           title: song.title,
@@ -303,21 +321,21 @@ class SocialService {
       throw new Error('Cannot follow yourself');
     }
 
-    const existing = await UserFollow.findOne({ followerId, followingId });
+    const existing = await UserFollow.findOne({ followerId, followingId }).select('_id').lean();
 
     if (existing) {
       await UserFollow.deleteOne({ followerId, followingId });
       return { followed: false };
     } else {
       await UserFollow.create({ followerId, followingId, followedAt: new Date() });
-      
+
       // Tạo notification
       await this.createNotification(followingId, 'FOLLOW', {
         actorId: followerId,
         targetId: followingId,
         targetType: 'user',
       });
-      
+
       return { followed: true };
     }
   }
@@ -326,7 +344,7 @@ class SocialService {
    * Follow/Unfollow artist
    */
   async followArtist(artistId, userId) {
-    const existing = await ArtistFollow.findOne({ artistId, userId });
+    const existing = await ArtistFollow.findOne({ artistId, userId }).select('_id').lean();
 
     if (existing) {
       await ArtistFollow.deleteOne({ artistId, userId });
@@ -344,15 +362,18 @@ class SocialService {
    */
   async getFollowedArtists(userId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    
+
     const follows = await ArtistFollow.find({ userId })
       .sort({ followedAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .select('artistId followedAt')
+      .lean();
 
     const artistIds = follows.map(f => f.artistId);
     const artists = await Artist.find({ artistId: { $in: artistIds } })
-      .select('artistId name thumbnail followerCount');
+      .select('artistId name thumbnail followerCount')
+      .lean();
 
     return artists;
   }
@@ -435,11 +456,12 @@ class SocialService {
    */
   async getUserNotifications(userId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
-    
+
     return Notification.find({ userId })
       .sort({ createdAt: -1 })
       .skip(skip)
-      .limit(limit);
+      .limit(limit)
+      .lean(); // Dùng lean() để tăng tốc độ
   }
 
   /**
