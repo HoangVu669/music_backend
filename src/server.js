@@ -8,6 +8,7 @@ require('dotenv').config();
 const { connectDatabase, isDatabaseConnected } = require('./config/db');
 const { errorMiddleware } = require('./middlewares/errorMiddleware');
 const { loggerMiddleware } = require('./middlewares/loggerMiddleware');
+const { dbMiddleware } = require('./middlewares/dbMiddleware');
 const Admin = require('./models/Admin');
 const { hashPassword } = require('./utils/bcrypt');
 const SocketService = require('./services/socketService');
@@ -24,6 +25,15 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(morgan('dev'));
 app.use(loggerMiddleware);
+
+// Database middleware - đảm bảo DB được kết nối trước mỗi request (tối ưu cho Vercel)
+// Bỏ qua health check vì nó tự xử lý DB connection
+app.use((req, res, next) => {
+  if (req.path === '/health') {
+    return next();
+  }
+  return dbMiddleware(req, res, next);
+});
 
 app.get('/health', async (req, res) => {
   let dbStatus = 'disconnected';
