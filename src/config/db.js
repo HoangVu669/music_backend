@@ -42,12 +42,9 @@ async function connectDatabase() {
         minPoolSize: isVercel ? 0 : 2, // Không giữ connection khi serverless (sẽ reconnect)
         maxIdleTimeMS: isVercel ? 10000 : 30000, // Giảm idle time cho serverless
         heartbeatFrequencyMS: isVercel ? 5000 : 10000, // Tăng tần suất heartbeat
-        // Tối ưu cho serverless: giảm retry và timeout
+        // Tối ưu cho serverless: retry
         retryWrites: true,
         retryReads: true,
-        // Keep connection alive
-        keepAlive: true,
-        keepAliveInitialDelay: 30000,
       });
       console.log(`MongoDB Connected: ${conn.connection.host} (${isVercel ? 'Serverless' : 'Standard'} mode)`);
       connectionPromise = null;
