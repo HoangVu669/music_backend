@@ -5,8 +5,7 @@ const cookieParser = require('cookie-parser');
 const http = require('http');
 require('dotenv').config();
 
-const mongoose = require('mongoose');
-const { connectDatabase } = require('./config/db');
+const { connectDatabase, isDatabaseConnected } = require('./config/db');
 const { errorMiddleware } = require('./middlewares/errorMiddleware');
 const { loggerMiddleware } = require('./middlewares/loggerMiddleware');
 const Admin = require('./models/Admin');
@@ -27,35 +26,41 @@ app.use(morgan('dev'));
 app.use(loggerMiddleware);
 
 app.get('/health', async (req, res) => {
+  let dbStatus = 'disconnected';
+  let dbError = null;
+
   try {
     // Kiểm tra database connection
-    const dbStatus = mongoose.connection.readyState;
-    // 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
-
-    if (dbStatus === 0 && process.env.VERCEL) {
-      // Nếu chưa connect và đang ở Vercel, thử connect
+    if (!isDatabaseConnected()) {
+      // Nếu chưa connect, thử connect (đặc biệt quan trọng cho Vercel cold start)
       try {
         await connectDatabase();
+        dbStatus = 'connected';
       } catch (err) {
-        return res.status(500).json({
-          status: 'error',
-          message: 'Database connection failed',
-          error: process.env.NODE_ENV === 'production' ? 'Internal error' : err.message
-        });
+        dbStatus = 'error';
+        dbError = err.message;
+        console.error('Health check: Database connection failed:', err.message);
       }
+    } else {
+      dbStatus = 'connected';
     }
 
     res.json({
-      status: 'ok',
+      status: dbStatus === 'connected' ? 'ok' : 'error',
       uptime: process.uptime(),
-      database: dbStatus === 1 ? 'connected' : 'disconnected',
-      environment: process.env.NODE_ENV || 'development'
+      database: dbStatus,
+      databaseError: dbError,
+      environment: process.env.NODE_ENV || 'development',
+      mongoUriSet: !!process.env.MONGO_URI,
     });
   } catch (error) {
+    console.error('Health check error:', error);
     res.status(500).json({
       status: 'error',
       message: error.message,
-      error: process.env.NODE_ENV === 'production' ? 'Internal error' : error.stack
+      error: process.env.NODE_ENV === 'production' ? 'Internal error' : error.stack,
+      database: dbStatus,
+      databaseError: dbError,
     });
   }
 });
