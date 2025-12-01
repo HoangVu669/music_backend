@@ -17,9 +17,10 @@
   },
   "functions": {
     "src/server.js": {
-      "maxDuration": 10,
-      "memory": 1024
+      "maxDuration": 30,
+      "memory": 3008
     }
-  }
+  },
+  "regions": ["sin1"]
 }
 

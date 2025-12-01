@@ -111,17 +111,18 @@ class AuthController {
         );
       }
 
-      // Find user by username or email - tối ưu query
+      // Find user by username or email - tối ưu với $or (1 query thay vì 2)
       const trimmedUsername = username.trim();
       const lowerEmail = trimmedUsername.toLowerCase();
 
-      // Select chỉ fields cần thiết, thử username trước (thường nhanh hơn)
-      let user = await User.findOne({ username: trimmedUsername })
-        .select('id username email password fullname avatar status');
-      if (!user) {
-        user = await User.findOne({ email: lowerEmail })
-          .select('id username email password fullname avatar status');
-      }
+      // Dùng $or để tìm trong 1 query - tối ưu hơn 2 queries riêng biệt
+      // Không dùng lean() vì cần methods (matchPassword, isLocked, isActive)
+      const user = await User.findOne({
+        $or: [
+          { username: trimmedUsername },
+          { email: lowerEmail }
+        ]
+      }).select('id username email password fullname avatar status');
 
       if (!user) {
         return res.status(401).json(

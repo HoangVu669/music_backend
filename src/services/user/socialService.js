@@ -104,41 +104,50 @@ class SocialService {
   async getSongComments(songId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
 
+    // Tối ưu: chỉ select fields cần thiết và dùng compound index
     const comments = await SongComment.find({
       songId,
       isDeleted: false,
       parentCommentId: null, // Chỉ lấy top-level comments
     })
+      .select('commentId songId userId userName userAvatar content likeCount replyCount timestamp createdAt likes')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit)
       .lean(); // Dùng lean() để tăng tốc độ
 
-    // Lấy replies cho mỗi comment - tối ưu với Promise.all và lean
+    // Nếu không có comments, return ngay
+    if (comments.length === 0) {
+      return [];
+    }
+
+    // Lấy replies cho mỗi comment - tối ưu với compound index
     const commentIds = comments.map(c => c.commentId);
     const allReplies = await CommentReply.find({
       commentId: { $in: commentIds },
       isDeleted: false,
     })
+      .select('replyId commentId userId userName userAvatar content likeCount mentionedUserId createdAt likes')
       .sort({ createdAt: 1 })
       .limit(50) // Limit tổng số replies
       .lean();
 
-    // Group replies by commentId
-    const repliesByComment = {};
+    // Group replies by commentId - tối ưu với Map
+    const repliesByComment = new Map();
     allReplies.forEach(reply => {
-      if (!repliesByComment[reply.commentId]) {
-        repliesByComment[reply.commentId] = [];
+      if (!repliesByComment.has(reply.commentId)) {
+        repliesByComment.set(reply.commentId, []);
       }
-      if (repliesByComment[reply.commentId].length < 5) {
-        repliesByComment[reply.commentId].push(reply);
+      const replies = repliesByComment.get(reply.commentId);
+      if (replies.length < 5) {
+        replies.push(reply);
       }
     });
 
     // Map comments với replies
     const commentsWithReplies = comments.map(comment => ({
       ...comment,
-      replies: repliesByComment[comment.commentId] || [],
+      replies: repliesByComment.get(comment.commentId) || [],
     }));
 
     return commentsWithReplies;
@@ -245,7 +254,7 @@ class SocialService {
   async getLikedSongs(userId, page = 1, limit = 20) {
     const skip = (page - 1) * limit;
 
-    // Get total count
+    // Get total count - tối ưu với countDocuments
     const total = await SongLike.countDocuments({ userId });
 
     const likes = await SongLike.find({ userId })
@@ -255,40 +264,62 @@ class SocialService {
       .select('songId likedAt')
       .lean(); // Dùng lean() để tăng tốc độ
 
+    if (likes.length === 0) {
+      return {
+        songs: [],
+        page,
+        limit,
+        total,
+      };
+    }
+
     const songIds = likes.map(l => l.songId);
+    // Tối ưu: chỉ select fields cần thiết
     const songsData = await Song.find({ songId: { $in: songIds } })
       .select('songId title artistsNames artistIds thumbnail duration likeCount listenCount')
       .lean(); // Dùng lean() để tăng tốc độ
 
-    // Map với likedAt từ SongLike và lấy thông tin từ ZingMp3 nếu không có trong DB
-    const songService = require('./songService');
-    const songs = await Promise.all(
-      likes.map(async (like) => {
-        let song = songsData.find(s => s.songId === like.songId);
+    // Tạo Map để lookup nhanh hơn O(1) thay vì O(n)
+    const songsMap = new Map(songsData.map(s => [s.songId, s]));
 
-        // Nếu không có trong DB, lấy từ ZingMp3
-        if (!song) {
-          try {
-            const songInfo = await songService.getSongInfo(like.songId);
-            // Map từ ZingMp3 format sang format cần thiết
-            song = {
-              songId: songInfo.encodeId || songInfo.id || like.songId,
-              title: songInfo.title || 'Unknown Title',
-              artistsNames: songInfo.artistsNames || (songInfo.artists || []).map(a => a.name).join(', ') || 'Unknown Artist',
-              thumbnail: songInfo.thumbnail || songInfo.thumbnailM || null,
-              duration: songInfo.duration || 0,
-            };
-          } catch (error) {
-            // Nếu không lấy được từ ZingMp3, skip bài hát này
-            console.error(`Failed to get song info for ${like.songId}:`, error.message);
-            return null;
-          }
+    // Tối ưu: chỉ gọi ZingMp3 API cho các songs không có trong DB, batch nếu có thể
+    const songService = require('./songService');
+    const missingSongIds = likes.filter(l => !songsMap.has(l.songId)).map(l => l.songId);
+
+    // Fetch missing songs từ ZingMp3 (song song nhưng giới hạn để tránh rate limit)
+    if (missingSongIds.length > 0) {
+      const missingSongsPromises = missingSongIds.slice(0, 5).map(async (songId) => {
+        try {
+          const songInfo = await songService.getSongInfo(songId);
+          return {
+            songId: songInfo.encodeId || songInfo.id || songId,
+            title: songInfo.title || 'Unknown Title',
+            artistsNames: songInfo.artistsNames || (songInfo.artists || []).map(a => a.name).join(', ') || 'Unknown Artist',
+            thumbnail: songInfo.thumbnail || songInfo.thumbnailM || null,
+            duration: songInfo.duration || 0,
+            likeCount: 0,
+            listenCount: 0,
+          };
+        } catch (error) {
+          console.error(`Failed to get song info for ${songId}:`, error.message);
+          return null;
         }
+      });
+
+      const missingSongs = (await Promise.all(missingSongsPromises)).filter(Boolean);
+      missingSongs.forEach(song => songsMap.set(song.songId, song));
+    }
+
+    // Map với likedAt từ SongLike
+    const songs = likes
+      .map((like) => {
+        const song = songsMap.get(like.songId);
+        if (!song) return null; // Skip nếu không tìm thấy
 
         return {
           songId: song.songId,
           title: song.title,
-          artistsNames: song.artistsNames || song.artistIds?.join(', ') || 'Unknown Artist',
+          artistsNames: song.artistsNames || (Array.isArray(song.artistIds) ? song.artistIds.join(', ') : 'Unknown Artist'),
           thumbnail: song.thumbnail,
           duration: song.duration,
           likeCount: song.likeCount || 0,
@@ -296,13 +327,10 @@ class SocialService {
           likedAt: like.likedAt,
         };
       })
-    );
-
-    // Remove null entries
-    const validSongs = songs.filter(Boolean);
+      .filter(Boolean); // Remove null entries
 
     return {
-      songs: validSongs,
+      songs,
       page,
       limit,
       total,

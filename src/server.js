@@ -31,17 +31,26 @@ app.use(loggerMiddleware);
 
 // Database middleware - đảm bảo DB connected trước mỗi request (tối ưu cho Vercel)
 app.use(async (req, res, next) => {
-  if (req.path === '/health') {
+  // Skip health check và static files
+  if (req.path === '/health' || req.path.startsWith('/_next') || req.path.startsWith('/static')) {
     return next();
   }
-  // Chỉ connect nếu chưa connected
+
+  // Chỉ connect nếu chưa connected - tối ưu cho serverless
   if (!isDatabaseConnected()) {
     try {
-      await connectDatabase();
+      // Set timeout để tránh block quá lâu
+      const connectPromise = connectDatabase();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Database connection timeout')), 3000)
+      );
+      await Promise.race([connectPromise, timeoutPromise]);
     } catch (error) {
+      console.error('Database connection error:', error.message);
       return res.status(503).json({
         success: false,
         message: 'Database connection failed',
+        error: process.env.NODE_ENV === 'production' ? undefined : error.message,
       });
     }
   }

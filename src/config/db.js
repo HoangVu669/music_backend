@@ -27,20 +27,29 @@ async function connectDatabase() {
     return connectionPromise;
   }
 
-  // Tạo connection mới với connection pooling tối ưu
+  // Tạo connection mới với connection pooling tối ưu cho serverless
   mongoose.set('strictQuery', true);
 
   connectionPromise = (async () => {
     try {
+      const isVercel = process.env.VERCEL || process.env.NODE_ENV === 'production';
+
       const conn = await mongoose.connect(mongoUri, {
-        serverSelectionTimeoutMS: 5000, // 5s timeout
+        serverSelectionTimeoutMS: isVercel ? 3000 : 5000, // Giảm timeout cho serverless
         socketTimeoutMS: 45000,
-        maxPoolSize: 10, // Connection pool size
-        minPoolSize: 2, // Giữ 2 connections sẵn sàng
-        maxIdleTimeMS: 30000,
-        heartbeatFrequencyMS: 10000,
+        // Tối ưu cho serverless: giảm pool size để tránh connection limit
+        maxPoolSize: isVercel ? 5 : 10,
+        minPoolSize: isVercel ? 0 : 2, // Không giữ connection khi serverless (sẽ reconnect)
+        maxIdleTimeMS: isVercel ? 10000 : 30000, // Giảm idle time cho serverless
+        heartbeatFrequencyMS: isVercel ? 5000 : 10000, // Tăng tần suất heartbeat
+        // Tối ưu cho serverless: giảm retry và timeout
+        retryWrites: true,
+        retryReads: true,
+        // Keep connection alive
+        keepAlive: true,
+        keepAliveInitialDelay: 30000,
       });
-      console.log(`MongoDB Connected: ${conn.connection.host}`);
+      console.log(`MongoDB Connected: ${conn.connection.host} (${isVercel ? 'Serverless' : 'Standard'} mode)`);
       connectionPromise = null;
       return conn;
     } catch (error) {

@@ -84,6 +84,8 @@ CommentReplySchema.index({ commentId: 1, createdAt: 1 });
 CommentReplySchema.index({ userId: 1, songId: 1 });
 CommentReplySchema.index({ mentionedUserId: 1 });
 CommentReplySchema.index({ likeCount: -1 });
+// Compound index cho query replies - tối ưu performance
+CommentReplySchema.index({ commentId: 1, isDeleted: 1, createdAt: 1 });
 
 // Soft delete reply
 CommentReplySchema.methods.softDelete = function () {
