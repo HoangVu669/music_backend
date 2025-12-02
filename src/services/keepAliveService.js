@@ -49,7 +49,7 @@ class KeepAliveService {
         // Sau đó ping mỗi 5 phút
         this.interval = setInterval(() => {
             this.ping();
-        }, 0.1 * 60 * 1000); // 5 minutes
+        }, 5 * 60 * 1000); // 5 minutes
     }
 
     /**
