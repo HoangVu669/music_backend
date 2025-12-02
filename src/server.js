@@ -31,8 +31,8 @@ app.use(loggerMiddleware);
 
 // Database middleware - đảm bảo DB connected trước mỗi request (tối ưu cho Vercel)
 app.use(async (req, res, next) => {
-  // Skip health check và static files
-  if (req.path === '/health' || req.path.startsWith('/_next') || req.path.startsWith('/static')) {
+  // Skip ping, health check và static files - không cần DB connection
+  if (req.path === '/ping' || req.path === '/health' || req.path.startsWith('/_next') || req.path.startsWith('/static')) {
     return next();
   }
 
@@ -57,6 +57,15 @@ app.use(async (req, res, next) => {
   next();
 });
 
+// Ultra-lightweight ping endpoint for keep-alive
+// Minimal response, no DB check, no heavy operations
+app.get('/ping', (req, res) => {
+  // Return minimal response - just status
+  // No timestamp, no uptime calculation to save CPU
+  res.status(200).json({ status: 'ok' });
+});
+
+// Health check endpoint (with DB check)
 app.get('/health', async (req, res) => {
   let dbStatus = 'disconnected';
   let dbError = null;
@@ -142,13 +151,20 @@ async function startServer() {
       }
     })().catch((err) => console.error('Admin seed error', err));
 
-    server.listen(PORT, () => {
-      console.log(`🚀 Server listening on port ${PORT}`);
-      console.log(`🔌 Socket.io server ready for real-time connections`);
+    return new Promise((resolve, reject) => {
+      server.listen(PORT, () => {
+        console.log(`🚀 Server listening on port ${PORT}`);
+        console.log(`🔌 Socket.io server ready for real-time connections`);
+        resolve();
+      });
+
+      server.on('error', (err) => {
+        reject(err);
+      });
     });
   } catch (err) {
     console.error('Failed to start server due to DB error', err);
-    process.exit(1);
+    throw err;
   }
 }
 
@@ -162,7 +178,33 @@ if (process.env.VERCEL) {
   module.exports = app;
 } else {
   // Local development: start server
-  startServer();
+  startServer().then(() => {
+    // Auto-start keep-alive service after server starts
+    // Mặc định: tự động chạy, có thể disable bằng ENABLE_KEEP_ALIVE=false
+    const enableKeepAlive = process.env.ENABLE_KEEP_ALIVE !== 'false'; // Default: true
+
+    if (enableKeepAlive) {
+      const KeepAliveService = require('./services/keepAliveService');
+
+      // Ưu tiên: KEEP_ALIVE_URL > VERCEL_URL > localhost
+      const keepAliveUrl = process.env.KEEP_ALIVE_URL ||
+        process.env.VERCEL_URL ||
+        `http://localhost:${PORT}`;
+
+      const interval = parseInt(process.env.KEEP_ALIVE_INTERVAL) || 5; // Default: 5 minutes
+
+      const keepAlive = new KeepAliveService(keepAliveUrl);
+      keepAlive.start(interval);
+
+      console.log(`🔄 Keep-alive service auto-started`);
+      console.log(`   Target: ${keepAliveUrl}`);
+      console.log(`   Interval: ${interval} minutes`);
+    }
+  }).catch((err) => {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  });
+
   module.exports = app;
 }
 
