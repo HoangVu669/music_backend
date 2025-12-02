@@ -19,11 +19,12 @@ function errorMiddleware(err, req, res, next) {
     return next(err);
   }
 
-  // Handle custom application errors with response code
-  if (err.responseCode) {
-    const httpStatus = getHttpStatus(err.responseCode);
+  // Handle custom application errors (AppError) with response code
+  if (err.name === 'AppError' || err.responseCode) {
+    const responseCode = err.responseCode || 'INTERNAL_ERROR';
+    const httpStatus = err.statusCode || getHttpStatus(responseCode);
     return res.status(httpStatus).json(
-      failure(err.responseCode, err.message || null, err.data || null)
+      failure(responseCode, err.message || null, err.data || null)
     );
   }
 

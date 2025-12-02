@@ -168,6 +168,52 @@ const ResponseCode = {
         message: 'Đã theo dõi rồi',
         httpStatus: 409,
     },
+    // Room-specific errors
+    ROOM_FULL: {
+        code: 'ROOM_FULL',
+        message: 'Phòng đã đầy',
+        httpStatus: 409,
+    },
+    PENDING_APPROVAL: {
+        code: 'PENDING_APPROVAL',
+        message: 'Yêu cầu tham gia đang chờ duyệt',
+        httpStatus: 202,
+    },
+    ALREADY_MEMBER: {
+        code: 'ALREADY_MEMBER',
+        message: 'Đã là thành viên của phòng',
+        httpStatus: 409,
+    },
+    ALREADY_REQUESTED: {
+        code: 'ALREADY_REQUESTED',
+        message: 'Đã gửi yêu cầu tham gia',
+        httpStatus: 409,
+    },
+    ALREADY_INVITED: {
+        code: 'ALREADY_INVITED',
+        message: 'Đã gửi lời mời cho người dùng này',
+        httpStatus: 409,
+    },
+    ALREADY_IN_QUEUE: {
+        code: 'ALREADY_IN_QUEUE',
+        message: 'Bài hát đã có trong danh sách phát',
+        httpStatus: 409,
+    },
+    NOT_MEMBER: {
+        code: 'NOT_MEMBER',
+        message: 'Bạn không phải thành viên của phòng',
+        httpStatus: 403,
+    },
+    INVITATION_EXPIRED: {
+        code: 'INVITATION_EXPIRED',
+        message: 'Lời mời đã hết hạn',
+        httpStatus: 410,
+    },
+    INVALID_STATUS: {
+        code: 'INVALID_STATUS',
+        message: 'Trạng thái không hợp lệ',
+        httpStatus: 400,
+    },
 
     // ===== AUTHENTICATION ERRORS (4xx) =====
     INVALID_CREDENTIALS: {

@@ -1,5 +1,6 @@
 /**
  * Socket Service - Real-time communication for rooms
+ * Clean Code: Tách biệt WebSocket logic, hỗ trợ đầy đủ real-time events
  */
 const { Server } = require('socket.io');
 const { verifyJwt } = require('../utils/jwt');
@@ -14,8 +15,10 @@ class SocketService {
       },
     });
 
-    this.roomSockets = new Map(); // roomId -> Set of socketIds
-    this.socketRooms = new Map(); // socketId -> roomId
+    // Tracking: roomId -> Set of socketIds
+    this.roomSockets = new Map();
+    // Tracking: socketId -> roomId
+    this.socketRooms = new Map();
 
     this.setupMiddleware();
     this.setupEventHandlers();
@@ -26,8 +29,10 @@ class SocketService {
    */
   setupMiddleware() {
     this.io.use((socket, next) => {
-      const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
-      
+      const token =
+        socket.handshake.auth.token ||
+        socket.handshake.headers.authorization?.replace('Bearer ', '');
+
       if (!token) {
         return next(new Error('Authentication required'));
       }
@@ -47,13 +52,19 @@ class SocketService {
   }
 
   /**
-   * Setup event handlers
+   * Setup event handlers - Real-time events cho room
    */
   setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`✅ Socket connected: ${socket.id} (User: ${socket.userName})`);
+      console.log(`✅ Socket connected: ${socket.id} (User: ${socket.userId}, ${socket.userName})`);
 
-      // Join room
+      // ===== ROOM EVENTS =====
+
+      /**
+       * Join room
+       * Event: 'room:join'
+       * Data: { roomId }
+       */
       socket.on('room:join', async (data) => {
         try {
           const { roomId } = data;
@@ -63,11 +74,20 @@ class SocketService {
           }
 
           // Join room in service
-          await roomService.joinRoom(roomId, socket.userId, socket.userName);
+          try {
+            await roomService.joinRoom(roomId, socket.userId, socket.userName);
+          } catch (error) {
+            // Nếu là pending approval, vẫn join socket room để nhận updates
+            if (error.responseCode === 'PENDING_APPROVAL') {
+              socket.emit('room:join-pending', { roomId, message: error.message });
+            } else {
+              throw error;
+            }
+          }
 
           // Join socket room
           socket.join(`room:${roomId}`);
-          
+
           // Track socket in room
           if (!this.roomSockets.has(roomId)) {
             this.roomSockets.set(roomId, new Set());
@@ -76,7 +96,7 @@ class SocketService {
           this.socketRooms.set(socket.id, roomId);
 
           // Get room data
-          const room = await roomService.getRoomWithSongs(roomId);
+          const room = await roomService.getRoomWithSongs(roomId, socket.userId);
 
           // Notify user
           socket.emit('room:joined', { room });
@@ -86,13 +106,18 @@ class SocketService {
             userId: socket.userId,
             userName: socket.userName,
             memberCount: room.memberCount,
+            timestamp: new Date(),
           });
         } catch (error) {
-          socket.emit('error', { message: error.message });
+          socket.emit('error', { message: error.message || 'Failed to join room' });
         }
       });
 
-      // Leave room
+      /**
+       * Leave room
+       * Event: 'room:leave'
+       * Data: { roomId }
+       */
       socket.on('room:leave', async (data) => {
         try {
           const { roomId } = data;
@@ -111,13 +136,20 @@ class SocketService {
           socket.to(`room:${roomId}`).emit('room:member-left', {
             userId: socket.userId,
             userName: socket.userName,
+            timestamp: new Date(),
           });
         } catch (error) {
-          socket.emit('error', { message: error.message });
+          socket.emit('error', { message: error.message || 'Failed to leave room' });
         }
       });
 
-      // Update playback state
+      // ===== PLAYBACK EVENTS =====
+
+      /**
+       * Update playback state
+       * Event: 'room:playback-update'
+       * Data: { roomId, currentSongId, currentPosition, isPlaying }
+       */
       socket.on('room:playback-update', async (data) => {
         try {
           const { roomId, currentSongId, currentPosition, isPlaying } = data;
@@ -136,71 +168,193 @@ class SocketService {
             currentPosition,
             isPlaying,
             lastSyncAt: room.lastSyncAt,
+            timestamp: new Date(),
           });
         } catch (error) {
-          socket.emit('error', { message: error.message });
+          socket.emit('error', { message: error.message || 'Failed to update playback' });
         }
       });
 
-      // Add song to queue
+      // ===== QUEUE EVENTS =====
+
+      /**
+       * Add song to queue
+       * Event: 'room:queue-add'
+       * Data: { roomId, songId }
+       */
       socket.on('room:queue-add', async (data) => {
         try {
           const { roomId, songId } = data;
-          if (!roomId || !songId) return;
+          if (!roomId || !songId) {
+            socket.emit('error', { message: 'Room ID and Song ID are required' });
+            return;
+          }
 
           const room = await roomService.addSongToQueue(roomId, songId, socket.userId);
 
-          // Broadcast to all in room
+          // Broadcast to all in room (including sender)
           this.io.to(`room:${roomId}`).emit('room:queue-updated', {
             queue: room.queue,
             addedBy: socket.userId,
             addedByUserName: socket.userName,
+            songId,
+            timestamp: new Date(),
           });
         } catch (error) {
-          socket.emit('error', { message: error.message });
+          socket.emit('error', { message: error.message || 'Failed to add song to queue' });
         }
       });
 
-      // Remove song from queue
+      /**
+       * Remove song from queue
+       * Event: 'room:queue-remove'
+       * Data: { roomId, songId }
+       */
       socket.on('room:queue-remove', async (data) => {
         try {
           const { roomId, songId } = data;
-          if (!roomId || !songId) return;
+          if (!roomId || !songId) {
+            socket.emit('error', { message: 'Room ID and Song ID are required' });
+            return;
+          }
 
           const room = await roomService.removeSongFromQueue(roomId, songId, socket.userId);
 
-          // Broadcast to all in room
+          // Broadcast to all in room (including sender)
           this.io.to(`room:${roomId}`).emit('room:queue-updated', {
             queue: room.queue,
             removedBy: socket.userId,
+            removedByUserName: socket.userName,
+            songId,
+            timestamp: new Date(),
           });
         } catch (error) {
-          socket.emit('error', { message: error.message });
+          socket.emit('error', { message: error.message || 'Failed to remove song from queue' });
         }
       });
 
-      // Chat in room
+      // ===== INVITATION EVENTS =====
+
+      /**
+       * Send invitation (chủ phòng gửi lời mời)
+       * Event: 'room:invite'
+       * Data: { roomId, inviteeId, message }
+       */
+      socket.on('room:invite', async (data) => {
+        try {
+          const { roomId, inviteeId, message } = data;
+          if (!roomId || !inviteeId) {
+            socket.emit('error', { message: 'Room ID and Invitee ID are required' });
+            return;
+          }
+
+          const invitation = await roomService.inviteUser(roomId, socket.userId, inviteeId, message);
+
+          // Emit to invitee if online
+          this.io.emit('room:invitation-received', {
+            invitation,
+            timestamp: new Date(),
+          });
+
+          // Notify sender
+          socket.emit('room:invitation-sent', {
+            invitation,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          socket.emit('error', { message: error.message || 'Failed to send invitation' });
+        }
+      });
+
+      /**
+       * Accept join request (chủ phòng chấp nhận yêu cầu)
+       * Event: 'room:request-accept'
+       * Data: { roomId, requestUserId }
+       */
+      socket.on('room:request-accept', async (data) => {
+        try {
+          const { roomId, requestUserId } = data;
+          if (!roomId || !requestUserId) {
+            socket.emit('error', { message: 'Room ID and Request User ID are required' });
+            return;
+          }
+
+          const room = await roomService.acceptJoinRequest(roomId, socket.userId, requestUserId);
+
+          // Notify requester
+          this.io.emit('room:request-accepted', {
+            roomId,
+            room,
+            timestamp: new Date(),
+          });
+
+          // Notify all in room
+          this.io.to(`room:${roomId}`).emit('room:member-joined', {
+            userId: requestUserId,
+            memberCount: room.memberCount,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          socket.emit('error', { message: error.message || 'Failed to accept request' });
+        }
+      });
+
+      /**
+       * Reject join request (chủ phòng từ chối yêu cầu)
+       * Event: 'room:request-reject'
+       * Data: { roomId, requestUserId }
+       */
+      socket.on('room:request-reject', async (data) => {
+        try {
+          const { roomId, requestUserId } = data;
+          if (!roomId || !requestUserId) {
+            socket.emit('error', { message: 'Room ID and Request User ID are required' });
+            return;
+          }
+
+          await roomService.rejectJoinRequest(roomId, socket.userId, requestUserId);
+
+          // Notify requester
+          this.io.emit('room:request-rejected', {
+            roomId,
+            timestamp: new Date(),
+          });
+        } catch (error) {
+          socket.emit('error', { message: error.message || 'Failed to reject request' });
+        }
+      });
+
+      // ===== CHAT EVENTS =====
+
+      /**
+       * Chat in room
+       * Event: 'room:chat'
+       * Data: { roomId, message }
+       */
       socket.on('room:chat', async (data) => {
         try {
           const { roomId, message } = data;
-          if (!roomId || !message) return;
-
-          // Save chat message (you can implement RoomChat model if needed)
-          // For now, just broadcast
+          if (!roomId || !message || message.trim().length === 0) {
+            return;
+          }
 
           // Broadcast to all in room (including sender)
           this.io.to(`room:${roomId}`).emit('room:chat-message', {
             userId: socket.userId,
             userName: socket.userName,
-            message,
+            message: message.trim(),
             timestamp: new Date(),
           });
         } catch (error) {
-          socket.emit('error', { message: error.message });
+          socket.emit('error', { message: error.message || 'Failed to send message' });
         }
       });
 
-      // Disconnect
+      // ===== DISCONNECT =====
+
+      /**
+       * Disconnect handler
+       */
       socket.on('disconnect', async () => {
         console.log(`❌ Socket disconnected: ${socket.id}`);
 
@@ -212,6 +366,7 @@ class SocketService {
             socket.to(`room:${roomId}`).emit('room:member-left', {
               userId: socket.userId,
               userName: socket.userName,
+              timestamp: new Date(),
             });
           } catch (error) {
             console.error('Error leaving room on disconnect:', error);
@@ -233,7 +388,19 @@ class SocketService {
   getIO() {
     return this.io;
   }
+
+  /**
+   * Broadcast to room (helper method)
+   * @param {string} roomId - Room ID
+   * @param {string} event - Event name
+   * @param {Object} data - Data to broadcast
+   */
+  broadcastToRoom(roomId, event, data) {
+    this.io.to(`room:${roomId}`).emit(event, {
+      ...data,
+      timestamp: new Date(),
+    });
+  }
 }
 
 module.exports = SocketService;
-

@@ -62,13 +62,25 @@ router.post('/rooms', authMiddleware(), roomController.createRoom);
 // Route cụ thể phải đứng trước route có parameter
 router.get('/rooms/public', roomController.getPublicRooms);
 router.get('/rooms/my-rooms', authMiddleware(), roomController.getMyRooms);
+router.get('/rooms/invitations', authMiddleware(), roomController.getMyInvitations);
 // Route có parameter đặt sau
 router.get('/rooms/:roomId', authMiddleware(), roomController.getRoom);
 router.post('/rooms/:roomId/join', authMiddleware(), roomController.joinRoom);
 router.post('/rooms/:roomId/leave', authMiddleware(), roomController.leaveRoom);
-router.put('/rooms/:roomId/playback', authMiddleware(), roomController.updatePlayback);
+router.get('/rooms/:roomId/queue', authMiddleware(), roomController.getQueue);
 router.post('/rooms/:roomId/queue', authMiddleware(), roomController.addSongToQueue);
 router.delete('/rooms/:roomId/queue/:songId', authMiddleware(), roomController.removeSongFromQueue);
+router.put('/rooms/:roomId/playback', authMiddleware(), roomController.updatePlayback);
+// Room management (chỉ chủ phòng)
+router.get('/rooms/:roomId/requests', authMiddleware(), roomController.getPendingRequests);
+router.post('/rooms/:roomId/requests/:userId/accept', authMiddleware(), roomController.acceptJoinRequest);
+router.post('/rooms/:roomId/requests/:userId/reject', authMiddleware(), roomController.rejectJoinRequest);
+router.post('/rooms/:roomId/invite', authMiddleware(), roomController.inviteUser);
+// Invitations
+router.post('/rooms/invitations/:invitationId/accept', authMiddleware(), roomController.acceptInvitation);
+router.post('/rooms/invitations/:invitationId/reject', authMiddleware(), roomController.rejectInvitation);
+// User search (for inviting)
+router.get('/users/search', authMiddleware(), roomController.searchUsers);
 
 // ===== SOCIAL FEATURES =====
 // Comments

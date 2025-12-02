@@ -39,6 +39,20 @@ const RoomSchema = new mongoose.Schema(
       default: 1,
       index: true,
     },
+    // Pending join requests (for private rooms)
+    pendingRequests: [
+      {
+        userId: {
+          type: String,
+          required: true,
+        },
+        userName: { type: String },
+        requestedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
 
     currentSongId: { type: String, index: true },
     currentPosition: {
