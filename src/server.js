@@ -177,29 +177,16 @@ if (process.env.VERCEL) {
   });
   module.exports = app;
 } else {
-  // Local development: start server
+  // Local development hoặc Render: start server
   startServer().then(() => {
-    // Auto-start keep-alive service after server starts
-    // Mặc định: tự động chạy, có thể disable bằng ENABLE_KEEP_ALIVE=false
-    const enableKeepAlive = process.env.ENABLE_KEEP_ALIVE !== 'false'; // Default: true
-
-    if (enableKeepAlive) {
-      const KeepAliveService = require('./services/keepAliveService');
-
-      // Ưu tiên: KEEP_ALIVE_URL > VERCEL_URL > localhost
-      const keepAliveUrl = process.env.KEEP_ALIVE_URL ||
-        process.env.VERCEL_URL ||
-        `http://localhost:${PORT}`;
-
-      const interval = parseInt(process.env.KEEP_ALIVE_INTERVAL) || 5; // Default: 5 minutes
-
-      const keepAlive = new KeepAliveService(keepAliveUrl);
-      keepAlive.start(interval);
-
-      console.log(`🔄 Keep-alive service auto-started`);
-      console.log(`   Target: ${keepAliveUrl}`);
-      console.log(`   Interval: ${interval} minutes`);
-    }
+    // Auto-start keep-alive: ping server mỗi 5 phút để tránh server ngủ đông (Render free tier)
+    // Ưu tiên: KEEP_ALIVE_URL > RENDER_EXTERNAL_URL > localhost
+    const KeepAliveService = require('./services/keepAliveService');
+    const keepAliveUrl = process.env.KEEP_ALIVE_URL ||
+      process.env.RENDER_EXTERNAL_URL ||
+      `http://localhost:${PORT}`;
+    const keepAlive = new KeepAliveService(keepAliveUrl);
+    keepAlive.start();
   }).catch((err) => {
     console.error('Failed to start server:', err);
     process.exit(1);

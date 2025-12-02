@@ -6,7 +6,6 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "keep-alive": "node src/scripts/keepAlive.js",
     "crawl": "node src/schedule/index.js",
     "crawl:songs": "node src/schedule/index.js songs",
     "crawl:artists": "node src/schedule/index.js artists",
