@@ -1,9 +1,10 @@
 /**
  * Auth Controller - User Authentication
+ * Microservice Architecture - Standardized Response Format
  */
 const User = require('../../models/User');
 const { signJwt } = require('../../utils/jwt');
-const formatResponse = require('../../utils/formatResponse');
+const { success, failure, getHttpStatus } = require('../../utils/formatResponse');
 const { USER_STATUS } = require('../../models/Enum');
 
 class AuthController {
@@ -11,7 +12,7 @@ class AuthController {
    * POST /api/v1/user/auth/register
    * Đăng ký user mới
    * Body: { username, email, password, fullname? }
-   * Response: { success: true, message: "success", data: { user, token } }
+   * Response: { success: true, code: "CREATED", message: "...", data: { user, token } }
    */
   async register(req, res, next) {
     try {
@@ -19,31 +20,31 @@ class AuthController {
 
       // Validation - Check required fields
       if (!username || !email || !password) {
-        return res.status(400).json(
-          formatResponse.failure('Username, email, and password are required', 400)
+        return res.status(getHttpStatus('MISSING_REQUIRED_FIELD')).json(
+          failure('MISSING_REQUIRED_FIELD', 'Username, email và password là bắt buộc')
         );
       }
 
       // Validation - Email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        return res.status(400).json(
-          formatResponse.failure('Invalid email format', 400)
+        return res.status(getHttpStatus('INVALID_EMAIL')).json(
+          failure('INVALID_EMAIL')
         );
       }
 
       // Validation - Username format (alphanumeric, underscore, 3-20 chars)
       const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
       if (!usernameRegex.test(username)) {
-        return res.status(400).json(
-          formatResponse.failure('Username must be 3-20 characters long and contain only letters, numbers, and underscores', 400)
+        return res.status(getHttpStatus('INVALID_USERNAME')).json(
+          failure('INVALID_USERNAME', 'Tên người dùng phải có từ 3-20 ký tự và chỉ chứa chữ cái, số và dấu gạch dưới')
         );
       }
 
       // Validation - Password strength (minimum 6 characters)
       if (password.length < 6) {
-        return res.status(400).json(
-          formatResponse.failure('Password must be at least 6 characters long', 400)
+        return res.status(getHttpStatus('PASSWORD_TOO_SHORT')).json(
+          failure('PASSWORD_TOO_SHORT')
         );
       }
 
@@ -54,9 +55,11 @@ class AuthController {
       }).select('_id username email').lean();
 
       if (existingUser) {
-        const field = existingUser.username === username ? 'Username' : 'Email';
-        return res.status(409).json(
-          formatResponse.failure(`${field} already exists`, 409)
+        const responseCode = existingUser.username === username
+          ? 'USERNAME_ALREADY_EXISTS'
+          : 'EMAIL_ALREADY_EXISTS';
+        return res.status(getHttpStatus(responseCode)).json(
+          failure(responseCode)
         );
       }
 
@@ -77,8 +80,8 @@ class AuthController {
         role: 'user',
       });
 
-      res.status(201).json(
-        formatResponse.success({
+      res.status(getHttpStatus('CREATED')).json(
+        success({
           user: {
             id: user.id,
             username: user.username,
@@ -87,7 +90,7 @@ class AuthController {
             avatar: user.avatar,
           },
           token,
-        }, 'Registration successful')
+        }, 'CREATED', 'Đăng ký thành công')
       );
     } catch (error) {
       next(error);
@@ -98,7 +101,7 @@ class AuthController {
    * POST /api/v1/user/auth/login
    * Đăng nhập
    * Body: { username (username or email), password }
-   * Response: { success: true, message: "success", data: { user, token } }
+   * Response: { success: true, code: "SUCCESS", message: "...", data: { user, token } }
    */
   async login(req, res, next) {
     try {
@@ -106,8 +109,8 @@ class AuthController {
 
       // Validation - Check required fields
       if (!username || !password) {
-        return res.status(400).json(
-          formatResponse.failure('Username (or email) and password are required', 400)
+        return res.status(getHttpStatus('MISSING_REQUIRED_FIELD')).json(
+          failure('MISSING_REQUIRED_FIELD', 'Username (hoặc email) và password là bắt buộc')
         );
       }
 
@@ -125,30 +128,30 @@ class AuthController {
       }).select('id username email password fullname avatar status');
 
       if (!user) {
-        return res.status(401).json(
-          formatResponse.failure('Invalid username/email or password', 401)
+        return res.status(getHttpStatus('INVALID_CREDENTIALS')).json(
+          failure('INVALID_CREDENTIALS')
         );
       }
 
       // Check password - tối ưu bằng cách verify trước khi check status
       const isPasswordMatch = await user.matchPassword(password);
       if (!isPasswordMatch) {
-        return res.status(401).json(
-          formatResponse.failure('Invalid username/email or password', 401)
+        return res.status(getHttpStatus('INVALID_CREDENTIALS')).json(
+          failure('INVALID_CREDENTIALS')
         );
       }
 
       // Check if user is locked
       if (user.isLocked()) {
-        return res.status(403).json(
-          formatResponse.failure('Account is locked. Please contact support', 403)
+        return res.status(getHttpStatus('ACCOUNT_LOCKED')).json(
+          failure('ACCOUNT_LOCKED')
         );
       }
 
       // Check if user is active (optional - can add pending verification check)
       if (!user.isActive()) {
-        return res.status(403).json(
-          formatResponse.failure('Account is not active. Please verify your email', 403)
+        return res.status(getHttpStatus('ACCOUNT_INACTIVE')).json(
+          failure('ACCOUNT_INACTIVE')
         );
       }
 
@@ -160,8 +163,8 @@ class AuthController {
         role: 'user',
       });
 
-      res.status(200).json(
-        formatResponse.success({
+      res.status(getHttpStatus('SUCCESS')).json(
+        success({
           user: {
             id: user.id,
             username: user.username,
@@ -170,7 +173,7 @@ class AuthController {
             avatar: user.avatar,
           },
           token,
-        }, 'Login successful')
+        }, 'SUCCESS', 'Đăng nhập thành công')
       );
     } catch (error) {
       next(error);
@@ -180,6 +183,7 @@ class AuthController {
   /**
    * GET /api/v1/user/auth/profile
    * Lấy thông tin profile
+   * Response: { success: true, code: "SUCCESS", message: "...", data: { user } }
    */
   async getProfile(req, res, next) {
     try {
@@ -189,14 +193,15 @@ class AuthController {
       const user = await User.findOne({ id: userId })
         .select('id username email fullname avatar bio dateOfBirth gender phone status createdAt')
         .lean();
+
       if (!user) {
-        return res.status(404).json(
-          formatResponse.failure('User not found', 404)
+        return res.status(getHttpStatus('USER_NOT_EXIST')).json(
+          failure('USER_NOT_EXIST')
         );
       }
 
-      res.json(
-        formatResponse.success({ user })
+      res.status(getHttpStatus('SUCCESS')).json(
+        success({ user }, 'SUCCESS', 'Thông tin cá nhân')
       );
     } catch (error) {
       next(error);
@@ -206,6 +211,7 @@ class AuthController {
   /**
    * PUT /api/v1/user/auth/profile
    * Cập nhật profile
+   * Response: { success: true, code: "UPDATED", message: "...", data: { user } }
    */
   async updateProfile(req, res, next) {
     try {
@@ -215,9 +221,10 @@ class AuthController {
       // Select chỉ fields cần thiết để update
       const user = await User.findOne({ id: userId })
         .select('id username email fullname avatar bio dateOfBirth gender phone');
+
       if (!user) {
-        return res.status(404).json(
-          formatResponse.failure('User not found', 404)
+        return res.status(getHttpStatus('USER_NOT_EXIST')).json(
+          failure('USER_NOT_EXIST')
         );
       }
 
@@ -231,8 +238,8 @@ class AuthController {
 
       await user.save();
 
-      res.json(
-        formatResponse.success({
+      res.status(getHttpStatus('UPDATED')).json(
+        success({
           user: {
             id: user.id,
             username: user.username,
@@ -244,7 +251,7 @@ class AuthController {
             gender: user.gender,
             phone: user.phone,
           },
-        })
+        }, 'UPDATED', 'Cập nhật thông tin thành công')
       );
     } catch (error) {
       next(error);
