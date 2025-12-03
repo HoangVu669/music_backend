@@ -3,6 +3,9 @@
 
 Write-Host "🚀 Starting Music Backend Server..." -ForegroundColor Green
 
+# Set NODE_SKIP_PLATFORM_CHECK for Windows Server 2012 R2
+$env:NODE_SKIP_PLATFORM_CHECK = "1"
+
 # Check if in correct directory
 if (-not (Test-Path "src/server.js")) {
     Write-Host "❌ Error: src/server.js not found!" -ForegroundColor Red
