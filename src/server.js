@@ -152,7 +152,7 @@ async function startServer() {
     })().catch((err) => console.error('Admin seed error', err));
 
     return new Promise((resolve, reject) => {
-      server.listen(PORT, () => {
+      server.listen(PORT, "0.0.0.0", () => {
         console.log(`🚀 Server listening on port ${PORT}`);
         console.log(`🔌 Socket.io server ready for real-time connections`);
         resolve();
