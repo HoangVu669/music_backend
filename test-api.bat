@@ -8,7 +8,7 @@ echo ========================================
 echo.
 
 echo [1] Testing local API...
-curl http://localhost:4000/health
+powershell -Command "try { $response = Invoke-WebRequest -Uri 'http://localhost:4000/health' -UseBasicParsing -TimeoutSec 5; Write-Host $response.Content; exit 0 } catch { Write-Host 'ERROR: Failed to connect to API'; Write-Host $_.Exception.Message; exit 1 }"
 if %errorLevel% neq 0 (
     echo.
     echo WARNING: Local API test failed!
