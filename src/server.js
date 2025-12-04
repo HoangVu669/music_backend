@@ -126,6 +126,18 @@ app.use(errorMiddleware);
 let socketService = null;
 if (!process.env.VERCEL) {
   socketService = new SocketService(server);
+
+  // Initialize DJ Rotation Engine
+  const { getDjRotationEngine } = require('./services/djRotationEngine');
+  const djRotationEngine = getDjRotationEngine(socketService);
+  djRotationEngine.start();
+  console.log('🎧 DJ Rotation Engine đã khởi động');
+
+  // Initialize Playback Engine (Normal Mode)
+  const { getPlaybackEngine } = require('./services/playbackEngine');
+  const playbackEngine = getPlaybackEngine(socketService);
+  playbackEngine.start();
+  console.log('🎵 Playback Engine đã khởi động');
 }
 
 const PORT = process.env.PORT || 4000;
@@ -152,7 +164,7 @@ async function startServer() {
     })().catch((err) => console.error('Admin seed error', err));
 
     return new Promise((resolve, reject) => {
-      server.listen(PORT, "0.0.0.0", () => {
+      server.listen(PORT, () => {
         console.log(`🚀 Server listening on port ${PORT}`);
         console.log(`🔌 Socket.io server ready for real-time connections`);
         resolve();

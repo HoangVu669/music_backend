@@ -8,6 +8,8 @@ const socialController = require('../../controllers/user/socialController');
 const playlistController = require('../../controllers/user/playlistController');
 const homeController = require('../../controllers/user/homeController');
 const discoveryController = require('../../controllers/user/discoveryController');
+const djRotationController = require('../../controllers/user/djRotationController');
+const voteSkipController = require('../../controllers/user/voteSkipController');
 
 // Keep old controllers for backward compatibility (if needed)
 const auth = require('../../controllers/user/authController');
@@ -71,6 +73,8 @@ router.get('/rooms/:roomId/queue', authMiddleware(), roomController.getQueue);
 router.post('/rooms/:roomId/queue', authMiddleware(), roomController.addSongToQueue);
 router.delete('/rooms/:roomId/queue/:songId', authMiddleware(), roomController.removeSongFromQueue);
 router.put('/rooms/:roomId/playback', authMiddleware(), roomController.updatePlayback);
+router.post('/rooms/:roomId/play/:songId', authMiddleware(), roomController.playSong);
+router.post('/rooms/:roomId/play-next', authMiddleware(), roomController.playNext);
 // Room management (chỉ chủ phòng)
 router.get('/rooms/:roomId/requests', authMiddleware(), roomController.getPendingRequests);
 router.post('/rooms/:roomId/requests/:userId/accept', authMiddleware(), roomController.acceptJoinRequest);
@@ -81,6 +85,31 @@ router.post('/rooms/invitations/:invitationId/accept', authMiddleware(), roomCon
 router.post('/rooms/invitations/:invitationId/reject', authMiddleware(), roomController.rejectInvitation);
 // User search (for inviting)
 router.get('/users/search', authMiddleware(), roomController.searchUsers);
+
+// ===== DJ ROTATION MODE =====
+// Create rotation room
+router.post('/rooms/dj-rotation/create', authMiddleware(), djRotationController.createRotationRoom);
+// Get room state
+router.get('/rooms/:roomId/dj-rotation/state', authMiddleware(), djRotationController.getRoomState);
+// DJ management
+router.post('/rooms/:roomId/dj-rotation/dj/add', authMiddleware(), djRotationController.addDj);
+router.post('/rooms/:roomId/dj-rotation/dj/remove', authMiddleware(), djRotationController.removeDj);
+router.post('/rooms/:roomId/dj-rotation/dj/join-slot', authMiddleware(), djRotationController.joinSlot);
+router.post('/rooms/:roomId/dj-rotation/dj/leave-slot', authMiddleware(), djRotationController.leaveSlot);
+// DJ track management
+router.post('/rooms/:roomId/dj-rotation/dj/add-track', authMiddleware(), djRotationController.addTrack);
+router.post('/rooms/:roomId/dj-rotation/dj/remove-track', authMiddleware(), djRotationController.removeTrack);
+// Manual advance (owner only)
+router.post('/rooms/:roomId/dj-rotation/advance', authMiddleware(), djRotationController.advanceToNextDj);
+// DJ reorder (owner only)
+router.put('/rooms/:roomId/dj-rotation/reorder', authMiddleware(), djRotationController.reorderDjs);
+// DJ queue reorder
+router.put('/rooms/:roomId/dj-rotation/dj/queue/reorder', authMiddleware(), djRotationController.reorderDjQueue);
+
+// ===== VOTE SKIP =====
+router.post('/rooms/:roomId/vote-skip', authMiddleware(), voteSkipController.voteSkip);
+router.delete('/rooms/:roomId/vote-skip', authMiddleware(), voteSkipController.unvoteSkip);
+router.get('/rooms/:roomId/vote-skip/status', authMiddleware(), voteSkipController.getVoteSkipStatus);
 
 // ===== SOCIAL FEATURES =====
 // Comments

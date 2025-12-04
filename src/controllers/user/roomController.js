@@ -42,7 +42,17 @@ class RoomController {
 
       const room = await roomService.getRoomWithSongs(roomId, userId);
 
-      res.json(formatResponse.success(room));
+      // Format response để đảm bảo có queueWithUrls và các field khác
+      const formattedRoom = roomService._formatRoomResponse(room, userId);
+      // Đảm bảo queueWithUrls được giữ lại
+      if (room.queueWithUrls) {
+        formattedRoom.queueWithUrls = room.queueWithUrls;
+      }
+      if (room.currentSongStreamingUrl) {
+        formattedRoom.currentSongStreamingUrl = room.currentSongStreamingUrl;
+      }
+
+      res.json(formatResponse.success(formattedRoom));
     } catch (error) {
       next(error);
     }
@@ -247,20 +257,59 @@ class RoomController {
 
   /**
    * PUT /api/v1/user/rooms/:roomId/playback
-   * Cập nhật trạng thái phát nhạc
+   * Cập nhật trạng thái phát nhạc (CHỈ CHỦ PHÒNG)
    */
   async updatePlayback(req, res, next) {
     try {
       const { roomId } = req.params;
       const { currentSongId, currentPosition, isPlaying } = req.body;
+      const userId = req.user.id;
 
       const room = await roomService.updatePlaybackState(roomId, {
         currentSongId,
         currentPosition,
         isPlaying,
-      });
+      }, userId);
 
       res.json(formatResponse.success(room, 'UPDATED', 'Cập nhật trạng thái phát nhạc thành công'));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/user/rooms/:roomId/play/:songId
+   * Chủ phòng chọn bài hát từ queue để phát
+   */
+  async playSong(req, res, next) {
+    try {
+      const { roomId, songId } = req.params;
+      const userId = req.user.id;
+
+      const room = await roomService.playSongFromQueue(roomId, songId, userId);
+
+      res.json(formatResponse.success(room, 'UPDATED', 'Phát bài hát thành công'));
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * POST /api/v1/user/rooms/:roomId/play-next
+   * Chủ phòng chuyển sang bài hát tiếp theo
+   */
+  async playNext(req, res, next) {
+    try {
+      const { roomId } = req.params;
+      const userId = req.user.id;
+
+      const room = await roomService.playNextSong(roomId, userId);
+
+      if (room) {
+        res.json(formatResponse.success(room, 'UPDATED', 'Phát bài hát tiếp theo thành công'));
+      } else {
+        res.json(formatResponse.success(null, 'NO_MORE_SONGS', 'Không còn bài hát nào trong danh sách phát'));
+      }
     } catch (error) {
       next(error);
     }

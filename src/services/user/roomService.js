@@ -5,9 +5,14 @@
 const Room = require('../../models/Room');
 const RoomActivity = require('../../models/RoomActivity');
 const RoomInvitation = require('../../models/RoomInvitation');
+const Song = require('../../models/Song');
 const { generateUniqueRandomId } = require('../../utils/generateId');
 const songService = require('./songService');
 const userSearchService = require('./userSearchService');
+const zingService = require('../zing.service');
+const voteSkipService = require('./voteSkipService');
+const { getRoomStateCache } = require('../roomStateCache');
+const { getSyncData } = require('../../utils/syncUtils');
 const AppError = require('../../utils/AppError');
 
 class RoomService {
@@ -19,7 +24,13 @@ class RoomService {
    * @returns {Promise<Object>} Thông tin phòng đã tạo
    */
   async createRoom(ownerId, ownerName, data = {}) {
-    const { name, description, isPrivate = false, maxMembers = 50 } = data;
+    const { name, description, isPrivate = false, maxMembers = 50, mode = 'normal' } = data;
+
+    // If coop mode, use coopService
+    if (mode === 'coop') {
+      const coopService = require('./coopService');
+      return await coopService.createCoopRoom(ownerId, ownerName, data);
+    }
 
     // Validate
     if (!name || name.trim().length === 0) {
@@ -34,14 +45,37 @@ class RoomService {
       roomId: await generateUniqueRandomId(Room, 'roomId'),
       name: name.trim(),
       description: description?.trim() || '',
-      ownerId: String(ownerId),
+      hostId: String(ownerId), // JQBX-style
+      ownerId: String(ownerId), // Legacy
       ownerName,
       members: [{ userId: String(ownerId), userName: ownerName }],
       memberCount: 1,
       isPrivate: Boolean(isPrivate),
+      isPublic: !Boolean(isPrivate), // JQBX-style
       maxMembers: parseInt(maxMembers),
       isActive: true,
       pendingRequests: [],
+      settings: {
+        autoplay: true,
+        allowMemberSkip: false,
+        allowMemberAddTrack: true,
+        strictSync: true,
+      },
+      currentTrack: {
+        zingId: null,
+        title: null,
+        artist: null,
+        artists: null,
+        thumbnail: null,
+        duration: 0,
+        startedAt: 0,
+        position: 0,
+        streamingUrl: null,
+        isPlaying: false,
+        djUserId: null,
+        queuedBy: null,
+        mode: 'normal',
+      },
     });
 
     // Log activity
@@ -52,7 +86,7 @@ class RoomService {
       activityType: 'ROOM_CREATED',
     });
 
-    return this._formatRoomResponse(room);
+    return this._formatRoomResponse(room, ownerId);
   }
 
   /**
@@ -75,7 +109,7 @@ class RoomService {
     // Kiểm tra đã join chưa
     const existingMember = room.members.find((m) => String(m.userId) === userIdString);
     if (existingMember) {
-      return this._formatRoomResponse(room);
+      return this._formatRoomResponse(room, userId);
     }
 
     // Kiểm tra số lượng thành viên
@@ -123,7 +157,7 @@ class RoomService {
         activityType: 'USER_JOINED',
       });
 
-      return this._formatRoomResponse(room);
+      return this._formatRoomResponse(room, userId);
     }
   }
 
@@ -166,7 +200,7 @@ class RoomService {
       // Xóa request nếu đã là member
       room.pendingRequests.splice(requestIndex, 1);
       await room.save();
-      return this._formatRoomResponse(room);
+      return this._formatRoomResponse(room, ownerId);
     }
 
     // Thêm vào members
@@ -189,7 +223,7 @@ class RoomService {
       activityType: 'JOIN_REQUEST_ACCEPTED',
     });
 
-    return this._formatRoomResponse(room);
+    return this._formatRoomResponse(room, ownerId);
   }
 
   /**
@@ -232,7 +266,7 @@ class RoomService {
       activityType: 'JOIN_REQUEST_REJECTED',
     });
 
-    return this._formatRoomResponse(room);
+    return this._formatRoomResponse(room, ownerId);
   }
 
   /**
@@ -347,7 +381,9 @@ class RoomService {
       activityType: 'USER_LEFT',
     });
 
-    return this._formatRoomResponse(room);
+    // Reload room để lấy thông tin mới nhất
+    const updatedRoom = await Room.findOne({ roomId, isActive: true });
+    return this._formatRoomResponse(updatedRoom, userId);
   }
 
   /**
@@ -356,12 +392,25 @@ class RoomService {
    * @param {Object} data - Dữ liệu playback
    * @returns {Promise<Object>} Thông tin phòng
    */
-  async updatePlaybackState(roomId, data) {
+  /**
+   * Cập nhật trạng thái phát nhạc
+   * CHỈ CHỦ PHÒNG mới được phép cập nhật playback state
+   * @param {string} roomId - ID phòng
+   * @param {Object} data - Dữ liệu playback
+   * @param {string} userId - ID người dùng (phải là owner)
+   * @returns {Promise<Object>} Thông tin phòng
+   */
+  async updatePlaybackState(roomId, data, userId) {
     const { currentSongId, currentPosition, isPlaying } = data;
 
     const room = await Room.findOne({ roomId, isActive: true });
     if (!room) {
       throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền: CHỈ CHỦ PHÒNG mới được update playback
+    if (String(room.ownerId) !== String(userId)) {
+      throw new AppError('FORBIDDEN', 'Chỉ chủ phòng mới được điều khiển phát nhạc');
     }
 
     room.currentSongId = currentSongId || null;
@@ -381,7 +430,7 @@ class RoomService {
       });
     }
 
-    return this._formatRoomResponse(room);
+    return this._formatRoomResponse(room, userId);
   }
 
   /**
@@ -409,7 +458,8 @@ class RoomService {
       throw new AppError('ALREADY_IN_QUEUE', 'Bài hát đã có trong danh sách phát');
     }
 
-    // Đảm bảo bài hát tồn tại trong DB
+    // Đảm bảo bài hát tồn tại trong DB (lấy từ ZingMp3 và lưu)
+    // saveSongToDB sẽ tự động fetch từ ZingMp3 nếu chưa có trong DB
     await songService.saveSongToDB(songId);
 
     // Thêm vào queue
@@ -420,6 +470,17 @@ class RoomService {
       order: maxOrder + 1,
       addedAt: new Date(),
     });
+
+    // Nếu chưa có bài hát nào đang phát, tự động phát bài đầu tiên
+    const shouldAutoPlay = !room.currentSongId && room.queue.length > 0;
+    if (shouldAutoPlay) {
+      const firstSong = room.queue[0];
+      room.currentSongId = firstSong.songId;
+      room.currentPosition = 0;
+      room.isPlaying = true;
+      room.lastSyncAt = new Date();
+    }
+
     await room.save();
 
     // Log activity
@@ -432,7 +493,162 @@ class RoomService {
       metadata: { songId },
     });
 
-    return this._formatRoomResponse(room);
+    // Reload room để lấy queue với đầy đủ thông tin bài hát
+    const updatedRoom = await this.getRoomWithSongs(roomId, addedBy);
+
+    // Format response với queueWithUrls đã được populate
+    const formattedRoom = this._formatRoomResponse(updatedRoom, addedBy);
+    // Đảm bảo queueWithUrls được giữ lại (vì _formatRoomResponse không include queueWithUrls)
+    formattedRoom.queueWithUrls = updatedRoom.queueWithUrls;
+
+    return formattedRoom;
+  }
+
+  /**
+   * Chủ phòng chọn bài hát từ queue để phát
+   * @param {string} roomId - ID phòng
+   * @param {string} songId - ID bài hát
+   * @param {string} userId - ID người dùng (phải là owner)
+   * @returns {Promise<Object>} Thông tin phòng
+   */
+  async playSongFromQueue(roomId, songId, userId) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền: CHỈ CHỦ PHÒNG mới được chọn bài để phát
+    if (String(room.ownerId) !== String(userId)) {
+      throw new AppError('FORBIDDEN', 'Chỉ chủ phòng mới được chọn bài để phát');
+    }
+
+    // Kiểm tra bài hát có trong queue không
+    const queueItem = room.queue.find((q) => q.songId === songId);
+    if (!queueItem) {
+      throw new AppError('NOT_FOUND', 'Bài hát không có trong danh sách phát');
+    }
+
+    // Đảm bảo bài hát đã có trong DB
+    await songService.saveSongToDB(songId);
+
+    // Cập nhật current song và bắt đầu phát
+    room.currentSongId = songId;
+    room.currentPosition = 0;
+    room.isPlaying = true;
+    room.lastSyncAt = new Date();
+    await room.save();
+
+    // Log activity
+    await RoomActivity.create({
+      roomId,
+      userId: room.ownerId,
+      userName: room.ownerName,
+      activityType: 'SONG_STARTED',
+      metadata: { songId },
+    });
+
+    // Reload room để lấy đầy đủ thông tin
+    const updatedRoom = await this.getRoomWithSongs(roomId, userId);
+    const formattedRoom = this._formatRoomResponse(updatedRoom, userId);
+    if (updatedRoom.queueWithUrls) {
+      formattedRoom.queueWithUrls = updatedRoom.queueWithUrls;
+    }
+    if (updatedRoom.currentSongStreamingUrl) {
+      formattedRoom.currentSongStreamingUrl = updatedRoom.currentSongStreamingUrl;
+    }
+
+    return formattedRoom;
+  }
+
+  /**
+   * Tự động phát bài hát tiếp theo trong queue (CHỈ CHỦ PHÒNG)
+   * Được gọi khi bài hát hiện tại kết thúc hoặc chủ phòng nhấn next
+   * @param {string} roomId - ID phòng
+   * @param {string} userId - ID người dùng (phải là owner)
+   * @returns {Promise<Object|null>} Thông tin phòng hoặc null nếu không còn bài hát
+   */
+  async playNextSong(roomId, userId = null) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      return null;
+    }
+
+    // Nếu có userId, kiểm tra quyền (chỉ owner mới được next)
+    if (userId && String(room.ownerId) !== String(userId)) {
+      throw new AppError('FORBIDDEN', 'Chỉ chủ phòng mới được chuyển bài hát');
+    }
+
+    // Tìm bài hát tiếp theo trong queue
+    if (!room.currentSongId || room.queue.length === 0) {
+      // Nếu không có bài hát hiện tại, phát bài đầu tiên
+      if (room.queue.length > 0) {
+        const firstSong = room.queue[0];
+        room.currentSongId = firstSong.songId;
+        room.currentPosition = 0;
+        room.isPlaying = true;
+        room.lastSyncAt = new Date();
+        await room.save();
+
+        // Log activity
+        await RoomActivity.create({
+          roomId,
+          userId: room.ownerId,
+          userName: room.ownerName,
+          activityType: 'SONG_STARTED',
+          metadata: { songId: firstSong.songId },
+        });
+
+        const updatedRoom = await this.getRoomWithSongs(roomId, room.ownerId);
+        const formattedRoom = this._formatRoomResponse(updatedRoom, room.ownerId);
+        if (updatedRoom.queueWithUrls) {
+          formattedRoom.queueWithUrls = updatedRoom.queueWithUrls;
+        }
+        if (updatedRoom.currentSongStreamingUrl) {
+          formattedRoom.currentSongStreamingUrl = updatedRoom.currentSongStreamingUrl;
+        }
+        return formattedRoom;
+      }
+      return null;
+    }
+
+    // Tìm vị trí bài hát hiện tại trong queue
+    const currentIndex = room.queue.findIndex((q) => q.songId === room.currentSongId);
+    if (currentIndex === -1 || currentIndex === room.queue.length - 1) {
+      // Không tìm thấy hoặc đã là bài cuối cùng
+      room.currentSongId = null;
+      room.currentPosition = 0;
+      room.isPlaying = false;
+      room.lastSyncAt = new Date();
+      await room.save();
+      return null;
+    }
+
+    // Phát bài hát tiếp theo
+    const nextSong = room.queue[currentIndex + 1];
+    room.currentSongId = nextSong.songId;
+    room.currentPosition = 0;
+    room.isPlaying = true;
+    room.lastSyncAt = new Date();
+    await room.save();
+
+    // Log activity
+    await RoomActivity.create({
+      roomId,
+      userId: room.ownerId,
+      userName: room.ownerName,
+      activityType: 'SONG_STARTED',
+      metadata: { songId: nextSong.songId },
+    });
+
+    const updatedRoom = await this.getRoomWithSongs(roomId, room.ownerId);
+    const formattedRoom = this._formatRoomResponse(updatedRoom, room.ownerId);
+    if (updatedRoom.queueWithUrls) {
+      formattedRoom.queueWithUrls = updatedRoom.queueWithUrls;
+    }
+    if (updatedRoom.currentSongStreamingUrl) {
+      formattedRoom.currentSongStreamingUrl = updatedRoom.currentSongStreamingUrl;
+    }
+    return formattedRoom;
   }
 
   /**
@@ -477,7 +693,7 @@ class RoomService {
       metadata: { songId },
     });
 
-    return this._formatRoomResponse(room);
+    return this._formatRoomResponse(room, userId);
   }
 
   /**
@@ -513,14 +729,62 @@ class RoomService {
       }
     }
 
-    // Lấy streaming URLs cho queue (limit 20 bài đầu)
+    // Populate thông tin bài hát cho queue từ DB
     if (room.queue && room.queue.length > 0) {
       roomData.queueWithUrls = await Promise.all(
-        room.queue.slice(0, 20).map(async (item) => {
+        room.queue.map(async (item) => {
           try {
-            const streamingUrl = await songService.getStreamingUrl(item.songId, true);
-            return { ...item, streamingUrl };
+            // Lấy thông tin bài hát từ DB
+            const song = await Song.findOne({ songId: item.songId }).lean();
+
+            // Nếu không có trong DB, lấy từ ZingMp3 và lưu vào DB
+            if (!song) {
+              await songService.saveSongToDB(item.songId);
+              const savedSong = await Song.findOne({ songId: item.songId }).lean();
+              if (savedSong) {
+                // Lấy streaming URL
+                let streamingUrl = null;
+                try {
+                  streamingUrl = await songService.getStreamingUrl(item.songId, true);
+                } catch (error) {
+                  // Ignore streaming URL error
+                }
+
+                return {
+                  ...item,
+                  title: savedSong.title,
+                  artistsNames: savedSong.artistsNames,
+                  thumbnail: savedSong.thumbnail,
+                  duration: savedSong.duration,
+                  artistIds: savedSong.artistIds,
+                  albumId: savedSong.albumId,
+                  streamingUrl,
+                };
+              }
+            }
+
+            // Lấy streaming URL
+            let streamingUrl = null;
+            try {
+              streamingUrl = await songService.getStreamingUrl(item.songId, true);
+            } catch (error) {
+              // Ignore streaming URL error
+            }
+
+            // Trả về queue item với đầy đủ thông tin bài hát
+            return {
+              ...item,
+              title: song?.title || null,
+              artistsNames: song?.artistsNames || null,
+              thumbnail: song?.thumbnail || null,
+              duration: song?.duration || null,
+              artistIds: song?.artistIds || null,
+              albumId: song?.albumId || null,
+              streamingUrl,
+            };
           } catch (error) {
+            // Nếu có lỗi, vẫn trả về item cơ bản
+            console.error(`Error populating song info for ${item.songId}:`, error.message);
             return { ...item, streamingUrl: null };
           }
         })
@@ -677,7 +941,7 @@ class RoomService {
     invitation.respondedAt = new Date();
     await invitation.save();
 
-    return this._formatRoomResponse(room);
+    return this._formatRoomResponse(room, userId);
   }
 
   /**
@@ -713,31 +977,454 @@ class RoomService {
     };
   }
 
+  // ===== JQBX-STYLE METHODS =====
+
+  /**
+   * JQBX: Host play - Bắt đầu phát nhạc
+   * @param {string} roomId - ID phòng
+   * @param {string} hostId - ID host
+   * @returns {Promise<Object>} Room với currentTrack đã cập nhật
+   */
+  async hostPlay(roomId, hostId) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền sử dụng permission system
+    const { requirePermission, ACTION } = require('../../utils/permissionUtils');
+    requirePermission(room, hostId, ACTION.PLAY);
+
+    // Nếu chưa có currentTrack, lấy từ queue
+    if (!room.currentTrack?.zingId && room.queue.length > 0) {
+      const firstTrack = room.queue[0];
+      await this.hostChangeTrack(roomId, hostId, firstTrack.zingId || firstTrack.songId);
+      return await Room.findOne({ roomId, isActive: true });
+    }
+
+    if (!room.currentTrack?.zingId) {
+      throw new AppError('NO_TRACK', 'Không có bài hát để phát');
+    }
+
+    // Cập nhật startedAt = now nếu chưa có hoặc đang pause (JQBX-style)
+    const now = Date.now();
+    if (!room.currentTrack.startedAt || !room.isPlaying) {
+      room.currentTrack.startedAt = now;
+      room.currentTrack.position = 0;
+    }
+
+    room.isPlaying = true;
+    room.currentTrack.isPlaying = true; // Update currentTrack.isPlaying
+    room.lastSyncAt = new Date();
+    await room.save();
+
+    return this._formatRoomResponse(room, hostId);
+  }
+
+  /**
+   * JQBX: Host pause - Tạm dừng phát nhạc
+   * @param {string} roomId - ID phòng
+   * @param {string} hostId - ID host
+   * @returns {Promise<Object>} Room
+   */
+  async hostPause(roomId, hostId) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền sử dụng permission system
+    const { requirePermission, ACTION } = require('../../utils/permissionUtils');
+    requirePermission(room, hostId, ACTION.PAUSE);
+
+    // Freeze position: tính position hiện tại dựa trên startedAt (JQBX-style)
+    if (room.currentTrack?.startedAt && room.isPlaying) {
+      const now = Date.now();
+      const elapsed = (now - room.currentTrack.startedAt) / 1000; // decimal precision
+      room.currentTrack.position = Math.min(
+        Math.max(0, elapsed),
+        room.currentTrack.duration || 0
+      );
+    }
+
+    room.isPlaying = false;
+    if (room.currentTrack) {
+      room.currentTrack.isPlaying = false; // Update currentTrack.isPlaying
+    }
+    room.lastSyncAt = new Date();
+    await room.save();
+
+    return this._formatRoomResponse(room, hostId);
+  }
+
+  /**
+   * JQBX: Host seek - Nhảy đến vị trí cụ thể
+   * @param {string} roomId - ID phòng
+   * @param {string} hostId - ID host
+   * @param {number} position - Vị trí mới (seconds)
+   * @returns {Promise<Object>} Room
+   */
+  async hostSeek(roomId, hostId, position) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền sử dụng permission system
+    const { requirePermission, ACTION } = require('../../utils/permissionUtils');
+    requirePermission(room, hostId, ACTION.SEEK);
+
+    if (!room.currentTrack?.zingId) {
+      throw new AppError('NO_TRACK', 'Không có bài hát đang phát');
+    }
+
+    const maxPosition = room.currentTrack.duration || 0;
+    const newPosition = Math.max(0, Math.min(position, maxPosition));
+
+    // Cập nhật position và reset startedAt (JQBX-style: seek reset startedAt)
+    const now = Date.now();
+    room.currentTrack.position = newPosition;
+    room.currentTrack.startedAt = now; // Reset startedAt khi seek
+    if (room.currentTrack) {
+      room.currentTrack.isPlaying = room.isPlaying; // Sync isPlaying
+    }
+    room.currentPosition = newPosition; // Legacy
+    room.lastSyncAt = new Date();
+    await room.save();
+
+    return this._formatRoomResponse(room, hostId);
+  }
+
+  /**
+   * JQBX: Host skip - Chuyển bài tiếp theo
+   * @param {string} roomId - ID phòng
+   * @param {string} hostId - ID host
+   * @returns {Promise<Object>} Room với bài mới
+   */
+  async hostSkip(roomId, hostId) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền sử dụng permission system
+    const { requirePermission, ACTION } = require('../../utils/permissionUtils');
+    requirePermission(room, hostId, ACTION.SKIP);
+
+    // Tìm bài tiếp theo trong queue
+    const currentZingId = room.currentTrack?.zingId || room.currentSongId;
+    let nextTrack = null;
+
+    if (currentZingId && room.queue.length > 0) {
+      const currentIndex = room.queue.findIndex(
+        (q) => (q.zingId || q.songId) === currentZingId
+      );
+      if (currentIndex >= 0 && currentIndex < room.queue.length - 1) {
+        nextTrack = room.queue[currentIndex + 1];
+      } else if (room.settings?.autoplay) {
+        // Autoplay: lấy bài random liên quan từ ZingMP3 (JQBX-style)
+        try {
+          const randomSong = await zingService.getRandomRelatedSong(currentZingId);
+          if (randomSong && randomSong.zingId) {
+            nextTrack = {
+              zingId: randomSong.zingId,
+              title: randomSong.title,
+              artist: randomSong.artist,
+              thumbnail: randomSong.thumbnail,
+              duration: randomSong.duration,
+              addedBy: hostId,
+            };
+            // Optional: Thêm vào queue để track lịch sử
+            // (JQBX không thêm vào queue, chỉ play trực tiếp)
+          }
+        } catch (error) {
+          console.error('Failed to get random related song:', error);
+        }
+      }
+    } else if (room.queue.length > 0) {
+      // Chưa có bài nào đang phát, lấy bài đầu tiên
+      nextTrack = room.queue[0];
+    }
+
+    if (!nextTrack) {
+      throw new AppError('NO_NEXT_TRACK', 'Không còn bài hát nào trong queue');
+    }
+
+    // Chuyển sang bài mới
+    return await this.hostChangeTrack(roomId, hostId, nextTrack.zingId || nextTrack.songId);
+  }
+
+  /**
+   * JQBX: Host change track - Đổi bài hát
+   * @param {string} roomId - ID phòng
+   * @param {string} hostId - ID host
+   * @param {string} zingId - ZingMP3 song ID
+   * @returns {Promise<Object>} Room với bài mới
+   */
+  async hostChangeTrack(roomId, hostId, zingId) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền sử dụng permission system
+    const { requirePermission, ACTION } = require('../../utils/permissionUtils');
+    requirePermission(room, hostId, ACTION.CHANGE_TRACK);
+
+    // Lấy thông tin bài hát từ ZingMP3
+    let songData;
+    try {
+      songData = await zingService.getFullSongData(zingId);
+    } catch (error) {
+      throw new AppError('SONG_NOT_FOUND', `Không tìm thấy bài hát: ${error.message}`);
+    }
+
+    // Cập nhật currentTrack (JQBX-style với đầy đủ fields)
+    const now = Date.now();
+    room.currentTrack = {
+      zingId: zingId,
+      title: songData.title,
+      artist: songData.artist,
+      artists: songData.artist, // Alternative field
+      thumbnail: songData.thumbnail,
+      duration: songData.duration,
+      startedAt: now,
+      position: 0,
+      streamingUrl: songData.streamingUrl,
+      isPlaying: true,
+      djUserId: null, // Normal mode
+      queuedBy: hostId,
+      mode: 'normal',
+    };
+
+    // Legacy fields (backward compatibility)
+    room.currentSongId = zingId;
+    room.currentPosition = 0;
+    room.isPlaying = true;
+    room.lastSyncAt = new Date();
+
+    // Reset vote skips khi bài mới bắt đầu
+    room.voteSkips = [];
+
+    await room.save();
+
+    // Invalidate cache
+    const { getRoomStateCache } = require('../roomStateCache');
+    getRoomStateCache().invalidate(roomId);
+
+    // Log activity
+    await RoomActivity.create({
+      roomId,
+      userId: hostId,
+      userName: room.ownerName,
+      activityType: 'SONG_STARTED',
+      metadata: { zingId },
+    });
+
+    return this._formatRoomResponse(room, hostId);
+  }
+
+  /**
+   * JQBX: Get sync data - Lấy dữ liệu sync cho members
+   * @param {string} roomId - ID phòng
+   * @returns {Promise<Object>} Sync data
+   */
+  async getSyncData(roomId) {
+    const room = await Room.findOne({ roomId, isActive: true }).lean();
+    if (!room) {
+      return null;
+    }
+
+    // Use centralized sync data utility
+    return getSyncData(room);
+  }
+
+  /**
+   * JQBX: Add track to queue
+   * @param {string} roomId - ID phòng
+   * @param {string} zingId - ZingMP3 song ID
+   * @param {string} addedBy - ID người thêm
+   * @returns {Promise<Object>} Room
+   */
+  async addTrackToQueue(roomId, zingId, addedBy) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    // Kiểm tra quyền sử dụng permission system
+    const { requirePermission, ACTION } = require('../../utils/permissionUtils');
+    requirePermission(room, addedBy, ACTION.ADD_TRACK);
+
+    // Kiểm tra đã có trong queue chưa
+    const existing = room.queue.find((q) => (q.zingId || q.songId) === zingId);
+    if (existing) {
+      throw new AppError('ALREADY_IN_QUEUE', 'Bài hát đã có trong danh sách phát');
+    }
+
+    // Lấy thông tin bài hát từ ZingMP3
+    let songData;
+    try {
+      songData = await zingService.getSongInfo(zingId);
+    } catch (error) {
+      throw new AppError('SONG_NOT_FOUND', `Không tìm thấy bài hát: ${error.message}`);
+    }
+
+    // Thêm vào queue
+    const maxOrder = room.queue.length > 0 ? Math.max(...room.queue.map((q) => q.order || 0)) : 0;
+    room.queue.push({
+      zingId: zingId,
+      songId: zingId, // Legacy
+      title: songData.title,
+      artist: songData.artist,
+      thumbnail: songData.thumbnail,
+      duration: songData.duration,
+      addedBy: String(addedBy),
+      order: maxOrder + 1,
+      addedAt: new Date(),
+    });
+
+    await room.save();
+
+    // Log activity
+    const user = room.members.find((m) => String(m.userId) === String(addedBy));
+    await RoomActivity.create({
+      roomId,
+      userId: addedBy,
+      userName: user?.userName || 'Unknown',
+      activityType: 'SONG_ADDED',
+      metadata: { zingId },
+    });
+
+    return this._formatRoomResponse(room, addedBy);
+  }
+
+  /**
+   * JQBX: Remove track from queue
+   * @param {string} roomId - ID phòng
+   * @param {string} zingId - ZingMP3 song ID
+   * @param {string} userId - ID người xóa
+   * @returns {Promise<Object>} Room
+   */
+  async removeTrackFromQueue(roomId, zingId, userId) {
+    const room = await Room.findOne({ roomId, isActive: true });
+    if (!room) {
+      throw new AppError('NOT_FOUND', 'Không tìm thấy phòng');
+    }
+
+    const queueItem = room.queue.find((q) => (q.zingId || q.songId) === zingId);
+    if (!queueItem) {
+      throw new AppError('NOT_FOUND', 'Bài hát không có trong danh sách phát');
+    }
+
+    // Chỉ owner hoặc người thêm bài mới được xóa
+    const userIdString = String(userId);
+    const isHost = String(room.hostId || room.ownerId) === userIdString;
+    const isAddedBy = String(queueItem.addedBy) === userIdString;
+
+    if (!isHost && !isAddedBy) {
+      throw new AppError('FORBIDDEN', 'Bạn không có quyền xóa bài hát này');
+    }
+
+    room.queue = room.queue.filter((q) => (q.zingId || q.songId) !== zingId);
+    await room.save();
+
+    // Log activity
+    const user = room.members.find((m) => String(m.userId) === userIdString);
+    await RoomActivity.create({
+      roomId,
+      userId,
+      userName: user?.userName || 'Unknown',
+      activityType: 'SONG_REMOVED',
+      metadata: { zingId },
+    });
+
+    return this._formatRoomResponse(room, userId);
+  }
+
   /**
    * Format room response - chuẩn hóa dữ liệu trả về
    * @private
    */
-  _formatRoomResponse(room) {
+  _formatRoomResponse(room, userId = null) {
     const roomObj = room.toObject ? room.toObject() : room;
-    return {
+    const userIdString = userId ? String(userId) : null;
+
+    // Tính toán isOwner và isMember
+    const isOwner = userIdString ? String(roomObj.ownerId) === userIdString : false;
+    const isMember = userIdString
+      ? roomObj.members?.some((m) => String(m.userId) === userIdString) || false
+      : false;
+
+    const response = {
       roomId: roomObj.roomId,
       name: roomObj.name,
       description: roomObj.description,
-      ownerId: roomObj.ownerId,
+      hostId: roomObj.hostId || roomObj.ownerId, // JQBX-style
+      ownerId: roomObj.ownerId, // Legacy
       ownerName: roomObj.ownerName,
       members: roomObj.members || [],
       memberCount: roomObj.memberCount,
       isPrivate: roomObj.isPrivate,
+      isPublic: roomObj.isPublic !== undefined ? roomObj.isPublic : !roomObj.isPrivate, // JQBX-style
       maxMembers: roomObj.maxMembers,
-      currentSongId: roomObj.currentSongId,
-      currentPosition: roomObj.currentPosition,
-      isPlaying: roomObj.isPlaying,
+      settings: roomObj.settings || {
+        autoplay: true,
+        allowMemberSkip: false,
+        allowMemberAddTrack: true,
+        strictSync: true,
+      },
+      currentTrack: roomObj.currentTrack ? {
+        zingId: roomObj.currentTrack.zingId || roomObj.currentSongId || null,
+        title: roomObj.currentTrack.title || null,
+        artist: roomObj.currentTrack.artist || null,
+        artists: roomObj.currentTrack.artists || roomObj.currentTrack.artist || null,
+        thumbnail: roomObj.currentTrack.thumbnail || null,
+        duration: roomObj.currentTrack.duration || 0,
+        startedAt: roomObj.currentTrack.startedAt || 0,
+        position: roomObj.currentTrack.position || roomObj.currentPosition || 0,
+        streamingUrl: roomObj.currentTrack.streamingUrl || null,
+        isPlaying: roomObj.currentTrack.isPlaying !== undefined ? roomObj.currentTrack.isPlaying : (roomObj.isPlaying || false),
+        djUserId: roomObj.currentTrack.djUserId || null,
+        queuedBy: roomObj.currentTrack.queuedBy || null,
+        mode: roomObj.currentTrack.mode || (roomObj.mode === 'dj_rotation' ? 'rotation' : 'normal'),
+      } : {
+        zingId: roomObj.currentSongId || null,
+        title: null,
+        artist: null,
+        artists: null,
+        thumbnail: null,
+        duration: 0,
+        startedAt: 0,
+        position: roomObj.currentPosition || 0,
+        streamingUrl: null,
+        isPlaying: false,
+        djUserId: null,
+        queuedBy: null,
+        mode: roomObj.mode === 'dj_rotation' ? 'rotation' : 'normal',
+      },
+      // Legacy fields (backward compatibility)
+      currentSongId: roomObj.currentSongId || roomObj.currentTrack?.zingId || null,
+      currentPosition: roomObj.currentPosition !== undefined ? roomObj.currentPosition : (roomObj.currentTrack?.position || 0),
+      isPlaying: roomObj.isPlaying !== undefined ? roomObj.isPlaying : false,
       lastSyncAt: roomObj.lastSyncAt,
       queue: roomObj.queue || [],
       pendingRequests: roomObj.pendingRequests || [],
+      isOwner,
+      isMember,
       createdAt: roomObj.createdAt,
       updatedAt: roomObj.updatedAt,
     };
+
+    // Giữ lại queueWithUrls và currentSongStreamingUrl nếu có (từ getRoomWithSongs)
+    if (roomObj.queueWithUrls) {
+      response.queueWithUrls = roomObj.queueWithUrls;
+    }
+    if (roomObj.currentSongStreamingUrl) {
+      response.currentSongStreamingUrl = roomObj.currentSongStreamingUrl;
+    }
+
+    return response;
   }
 }
 
